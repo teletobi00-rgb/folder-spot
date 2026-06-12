@@ -108,8 +108,12 @@ public partial class App : Application
         MainWindow = window;
         window.Show();
 
-        // 셸 확장 DLL 선로딩 — 첫 우클릭 메뉴 지연을 줄인다.
-        _host.Services.GetRequiredService<IShellContextMenuService>().BeginWarmUp();
+        // 셸 확장 DLL 선로딩 — 첫 우클릭 메뉴 지연을 줄인다. (진단용 비활성화: EXPLORER_DISABLE_MENU_WARMUP=1)
+        if (Environment.GetEnvironmentVariable("EXPLORER_DISABLE_MENU_WARMUP") != "1")
+        {
+            _host.Services.GetRequiredService<IShellContextMenuService>().BeginWarmUp();
+        }
+
         Log.Information("Explorer 시작 완료");
     }
 

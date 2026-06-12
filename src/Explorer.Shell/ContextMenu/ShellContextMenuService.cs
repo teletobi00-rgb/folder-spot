@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using Explorer.Core.FileSystem;
 using Microsoft.Extensions.Logging;
 using Vanara.PInvoke;
@@ -16,7 +17,8 @@ public interface IShellContextMenuService
     void ShowMenu(IReadOnlyList<string> paths, int screenX, int screenY);
 
     /// <summary>
-    /// 셸 확장 DLL을 백그라운드에서 미리 로드해 첫 우클릭 지연을 줄인다. 시작 후 1회 호출.
+    /// 셸 확장 핸들러 DLL을 미리 로드해 첫 우클릭 지연을 줄인다.
+    /// UI 스레드에서 호출해야 하며, 실제 작업은 idle 타임에 청크로 분산된다.
     /// </summary>
     void BeginWarmUp();
 }
@@ -47,8 +49,11 @@ public sealed class ShellContextMenuService : IShellContextMenuService
                 items.Add(new ShellItem(PathUtils.Normalize(path)));
             }
 
-            using var menu = ShellContextMenu.CreateFromItems(items, out var keepAlive);
-            using (keepAlive)
+            // 해제 순서가 결정적으로 중요하다: 메뉴 → keepAlive → ShellItem.
+            // keepAlive는 메뉴의 네이티브 리소스를 떠받치므로 메뉴보다 먼저 해제하면
+            // 이중 해제로 힙 손상(0xc0000374)이 발생한다 (Vanara 공식 테스트 패턴 준수).
+            var menu = ShellContextMenu.CreateFromItems(items, out var keepAlive);
+            try
             {
                 var createdMs = stopwatch.ElapsedMilliseconds;
 
@@ -61,6 +66,11 @@ public sealed class ShellContextMenuService : IShellContextMenuService
                     createdMs, populatedMs - createdMs, paths.Count);
 
                 menu.ShowContextMenu(new POINT(screenX, screenY));
+            }
+            finally
+            {
+                menu.Dispose();
+                keepAlive.Dispose();
             }
         }
         catch (Exception ex)
@@ -79,52 +89,90 @@ public sealed class ShellContextMenuService : IShellContextMenuService
 
     public void BeginWarmUp()
     {
-        // STA COM은 메시지 펌프가 필요하다(일부 셸 확장이 cross-apartment 마샬링) —
-        // Dispatcher.Run으로 펌프를 돌리고 워밍업 후 스스로 종료한다.
-        var thread = new Thread(() =>
+        // 메뉴 객체를 미리 만드는 방식(보조 STA 스레드)은 일부 셸 확장에서 힙 손상을 일으켰다(0xc0000374).
+        // 대신 비용의 본체인 "확장 DLL 로드"만 선수행한다: 레지스트리에서 컨텍스트 메뉴 핸들러
+        // CLSID를 모아 UI 스레드 idle 타임에 청크 단위로 생성·즉시 해제. QueryContextMenu는 호출하지 않는다.
+        var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
+        var clsids = new Queue<Guid>(EnumerateContextMenuHandlerClsids());
+        if (clsids.Count == 0)
         {
-            var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
-            dispatcher.BeginInvoke(WarmUpCore);
-            System.Windows.Threading.Dispatcher.Run();
-        })
+            return;
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+        var loaded = 0;
+        var total = clsids.Count;
+
+        void ProcessChunk()
         {
-            Name = "Explorer.MenuWarmUp",
-            IsBackground = true,
-            Priority = ThreadPriority.BelowNormal,
-        };
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
+            var chunkStart = Stopwatch.GetTimestamp();
+            while (clsids.Count > 0 && Stopwatch.GetElapsedTime(chunkStart).TotalMilliseconds < 30)
+            {
+                var clsid = clsids.Dequeue();
+                try
+                {
+                    if (Type.GetTypeFromCLSID(clsid) is { } comType
+                        && Activator.CreateInstance(comType) is { } handler)
+                    {
+                        Marshal.ReleaseComObject(handler);
+                        loaded++;
+                    }
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    // 확장 생성 실패는 흔하다(권한, 의존성) — 무시하고 다음으로.
+                    _logger.LogTrace(ex, "핸들러 워밍업 실패: {Clsid}", clsid);
+                }
+            }
+
+            if (clsids.Count > 0)
+            {
+                _ = dispatcher.BeginInvoke(ProcessChunk, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            }
+            else
+            {
+                _logger.LogDebug(
+                    "컨텍스트 메뉴 핸들러 워밍업 완료: {Loaded}/{Total}개, {ElapsedMs}ms",
+                    loaded, total, stopwatch.ElapsedMilliseconds);
+            }
+        }
+
+        _ = dispatcher.BeginInvoke(ProcessChunk, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
     }
 
-    private void WarmUpCore()
+    /// <summary>파일/폴더에 적용되는 컨텍스트 메뉴 핸들러 CLSID를 레지스트리에서 수집한다.</summary>
+    private static HashSet<Guid> EnumerateContextMenuHandlerClsids()
     {
-        try
-        {
-            var stopwatch = Stopwatch.StartNew();
+        string[] roots = [@"*\shellex\ContextMenuHandlers", @"AllFilesystemObjects\shellex\ContextMenuHandlers", @"Directory\shellex\ContextMenuHandlers", @"Folder\shellex\ContextMenuHandlers"];
+        var clsids = new HashSet<Guid>();
 
-            // 파일용 + 폴더용 핸들러를 각각 한 번씩 열거시켜 확장 DLL을 프로세스에 적재한다.
-            WarmUpFor(Environment.ProcessPath ?? Path.Combine(Environment.SystemDirectory, "cmd.exe"));
-            WarmUpFor(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+        foreach (var root in roots)
+        {
+            try
+            {
+                using var rootKey = Microsoft.Win32.Registry.ClassesRoot.OpenSubKey(root);
+                if (rootKey is null)
+                {
+                    continue;
+                }
 
-            _logger.LogDebug("컨텍스트 메뉴 워밍업 완료: {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+                foreach (var subKeyName in rootKey.GetSubKeyNames())
+                {
+                    using var handlerKey = rootKey.OpenSubKey(subKeyName);
+                    var raw = handlerKey?.GetValue(null) as string;
+                    var candidate = string.IsNullOrWhiteSpace(raw) ? subKeyName : raw;
+                    if (Guid.TryParse(candidate, out var clsid))
+                    {
+                        clsids.Add(clsid);
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or IOException or UnauthorizedAccessException)
+            {
+                // 일부 키 접근 불가 — 무시
+            }
         }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "컨텍스트 메뉴 워밍업 실패 — 무시하고 계속");
-        }
-        finally
-        {
-            System.Windows.Threading.Dispatcher.CurrentDispatcher.InvokeShutdown();
-        }
-    }
 
-    private static void WarmUpFor(string path)
-    {
-        using var item = new ShellItem(path);
-        using var menu = ShellContextMenu.CreateFromItems([item], out var keepAlive);
-        using (keepAlive)
-        {
-            menu.PopulateMenu();
-        }
+        return clsids;
     }
 }

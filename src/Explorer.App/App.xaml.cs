@@ -5,7 +5,11 @@ using Explorer.App.Services;
 using Explorer.App.ViewModels;
 using Explorer.App.Views;
 using Explorer.Core;
+using Explorer.Core.FileSystem;
 using Explorer.Core.Settings;
+using Explorer.Shell.Drives;
+using Explorer.Shell.Icons;
+using Explorer.Shell.Launch;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
@@ -55,6 +59,14 @@ public partial class App : Application
             AppPaths.SettingsFile,
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<JsonSettingsService>>()));
         services.AddSingleton<IThemeService, WpfUiThemeService>();
+
+        services.AddSingleton<IFileSystemEnumerator, FileSystemEnumerator>();
+        services.AddSingleton<IDriveProvider, DriveInfoDriveProvider>();
+        services.AddSingleton<IFileLauncher, ShellFileLauncher>();
+        services.AddSingleton<IShellIconProvider, ShellIconProvider>();
+
+        services.AddSingleton<FileListViewModel>();
+        services.AddSingleton<DriveSidebarViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
     }

@@ -96,12 +96,12 @@ public sealed class JsonSettingsServiceTests : IDisposable
     [Fact]
     public void Load_AfterUpdate_RoundtripsAllProperties()
     {
-        CreateService().Update(s => s with { Theme = AppTheme.Light });
+        CreateService().Update(s => s with { Theme = AppTheme.Light, ShowHiddenFiles = true });
 
         var reloaded = CreateService();
         reloaded.Load();
 
-        reloaded.Current.Should().Be(new AppSettings { Theme = AppTheme.Light });
+        reloaded.Current.Should().Be(new AppSettings { Theme = AppTheme.Light, ShowHiddenFiles = true });
     }
 
     [Fact]

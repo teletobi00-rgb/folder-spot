@@ -5,6 +5,7 @@
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                  xmlns:viewmodels="clr-namespace:Explorer.App.ViewModels"
+                 xmlns:views="clr-namespace:Explorer.App.Views"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewmodels:MainWindowViewModel}"
                  Title="Explorer"
@@ -14,34 +15,111 @@
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="Mica"
                  WindowCornerPreference="Round">
+    <ui:FluentWindow.InputBindings>
+        <KeyBinding Modifiers="Alt" Key="Left" Command="{Binding FileList.GoBackCommand}" />
+        <KeyBinding Modifiers="Alt" Key="Right" Command="{Binding FileList.GoForwardCommand}" />
+        <KeyBinding Modifiers="Alt" Key="Up" Command="{Binding FileList.GoUpCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="R" Command="{Binding FileList.RefreshCommand}" />
+    </ui:FluentWindow.InputBindings>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <ui:TitleBar Grid.Row="0" Title="Explorer" />
 
-        <StackPanel Grid.Row="1"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center">
-            <TextBlock HorizontalAlignment="Center"
-                       FontSize="28"
-                       FontWeight="SemiBold"
-                       Text="Explorer" />
-            <TextBlock Margin="0,8,0,24"
-                       HorizontalAlignment="Center"
-                       Opacity="0.7"
-                       Text="Phase 0 — 스캐폴딩 완료. Phase 1에서 파일 목록이 표시됩니다." />
-            <ui:Button HorizontalAlignment="Center"
-                       Appearance="Primary"
+        <!-- 툴바: 네비게이션 + 주소창 + 테마 -->
+        <Grid Grid.Row="1" Margin="8,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <ui:Button Margin="0,0,4,0"
+                           Command="{Binding FileList.GoBackCommand}"
+                           Content="←"
+                           ToolTip="뒤로 (Alt+←)" />
+                <ui:Button Margin="0,0,4,0"
+                           Command="{Binding FileList.GoForwardCommand}"
+                           Content="→"
+                           ToolTip="앞으로 (Alt+→)" />
+                <ui:Button Margin="0,0,4,0"
+                           Command="{Binding FileList.GoUpCommand}"
+                           Content="↑"
+                           ToolTip="위로 (Alt+↑)" />
+                <ui:Button Margin="0,0,8,0"
+                           Command="{Binding FileList.RefreshCommand}"
+                           Content="⟳"
+                           ToolTip="새로 고침 (Ctrl+R)" />
+            </StackPanel>
+
+            <TextBox Grid.Column="1"
+                     VerticalAlignment="Center"
+                     Text="{Binding AddressBar.Text, UpdateSourceTrigger=PropertyChanged}"
+                     ToolTip="{Binding AddressBar.ErrorText}">
+                <TextBox.InputBindings>
+                    <KeyBinding Key="Return" Command="{Binding AddressBar.SubmitCommand}" />
+                </TextBox.InputBindings>
+            </TextBox>
+
+            <ui:Button Grid.Column="2"
+                       Margin="8,0,0,0"
                        Command="{Binding ToggleThemeCommand}"
-                       Content="테마 전환" />
-            <TextBlock Margin="0,12,0,0"
-                       HorizontalAlignment="Center"
-                       Opacity="0.7">
-                <Run Text="현재 테마: " /><Run Text="{Binding CurrentTheme, Mode=OneWay}" />
+                       Content="테마"
+                       ToolTip="{Binding CurrentTheme}" />
+        </Grid>
+
+        <!-- 본문: 드라이브 사이드바 | 파일 목록 -->
+        <Grid Grid.Row="2" Margin="8,0,8,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="220" MinWidth="140" />
+                <ColumnDefinition Width="4" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <ListBox x:Name="DriveList"
+                     Grid.Column="0"
+                     ItemsSource="{Binding DriveSidebar.Drives}"
+                     SelectionChanged="OnDriveSelectionChanged">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Margin="0,2">
+                            <TextBlock FontWeight="SemiBold" Text="{Binding DisplayName}" />
+                            <TextBlock FontSize="11"
+                                       Opacity="0.6"
+                                       Text="{Binding DetailText}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <GridSplitter Grid.Column="1"
+                          HorizontalAlignment="Stretch"
+                          Background="Transparent" />
+
+            <views:FileListView Grid.Column="2" DataContext="{Binding FileList}" />
+        </Grid>
+
+        <!-- 상태바 -->
+        <Grid Grid.Row="3" Margin="12,4,12,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" FontSize="12" Opacity="0.7">
+                <Run Text="{Binding FileList.Items.Count, Mode=OneWay}" /><Run Text="개 항목" />
             </TextBlock>
-        </StackPanel>
+            <TextBlock Grid.Column="1"
+                       Margin="16,0,0,0"
+                       FontSize="12"
+                       Opacity="0.7"
+                       Text="{Binding FileList.StatusMessage}"
+                       TextTrimming="CharacterEllipsis" />
+        </Grid>
     </Grid>
 </ui:FluentWindow>

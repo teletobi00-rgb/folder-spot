@@ -1,0 +1,87 @@
+<UserControl x:Class="Explorer.App.Views.FileListView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewmodels="clr-namespace:Explorer.App.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=viewmodels:FileListViewModel}">
+    <Grid>
+        <ListView x:Name="FileList"
+                  ItemsSource="{Binding Items}"
+                  SelectedItem="{Binding SelectedItem}"
+                  SelectionMode="Extended"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                  GridViewColumnHeader.Click="OnColumnHeaderClick"
+                  MouseDoubleClick="OnItemDoubleClick">
+            <ListView.InputBindings>
+                <KeyBinding Key="Return"
+                            Command="{Binding OpenItemCommand}"
+                            CommandParameter="{Binding SelectedItem}" />
+                <KeyBinding Key="Back" Command="{Binding GoUpCommand}" />
+            </ListView.InputBindings>
+            <ListView.View>
+                <GridView>
+                    <GridViewColumn x:Name="NameColumn" Header="이름" Width="340">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <Image Width="16"
+                                           Height="16"
+                                           Margin="0,0,8,0"
+                                           VerticalAlignment="Center"
+                                           Source="{Binding Icon}" />
+                                    <TextBlock VerticalAlignment="Center"
+                                               Text="{Binding Name}"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <GridViewColumn x:Name="ExtensionColumn"
+                                    Width="70"
+                                    DisplayMemberBinding="{Binding Extension}"
+                                    Header="확장자" />
+                    <GridViewColumn x:Name="SizeColumn" Header="크기" Width="100">
+                        <GridViewColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock HorizontalAlignment="Right"
+                                           Text="{Binding SizeText}"
+                                           TextAlignment="Right" />
+                            </DataTemplate>
+                        </GridViewColumn.CellTemplate>
+                    </GridViewColumn>
+                    <GridViewColumn x:Name="DateModifiedColumn"
+                                    Width="140"
+                                    DisplayMemberBinding="{Binding DateModifiedText}"
+                                    Header="수정한 날짜" />
+                    <GridViewColumn x:Name="AttributesColumn"
+                                    Width="70"
+                                    DisplayMemberBinding="{Binding AttributesText}"
+                                    Header="특성" />
+                </GridView>
+            </ListView.View>
+        </ListView>
+
+        <!-- 로딩 오버레이 -->
+        <Border Background="Transparent"
+                Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <ui:ProgressRing IsIndeterminate="True"
+                             Width="48"
+                             Height="48"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center" />
+        </Border>
+
+        <!-- 빈 폴더/오류 상태 -->
+        <TextBlock x:Name="StatusText"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   FontSize="14"
+                   Opacity="0.6"
+                   Visibility="Collapsed" />
+    </Grid>
+</UserControl>

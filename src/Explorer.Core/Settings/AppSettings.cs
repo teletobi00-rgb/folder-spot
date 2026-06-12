@@ -8,4 +8,6 @@ public sealed record AppSettings
     public int SchemaVersion { get; init; } = CurrentSchemaVersion;
 
     public AppTheme Theme { get; init; } = AppTheme.System;
+
+    public bool ShowHiddenFiles { get; init; }
 }

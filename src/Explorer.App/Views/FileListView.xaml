@@ -7,6 +7,26 @@
              xmlns:viewmodels="clr-namespace:Explorer.App.ViewModels"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=viewmodels:FileListViewModel}">
+    <UserControl.Resources>
+        <!-- 항목 우클릭 메뉴: 자체 명령만 사용 — 셸 확장 in-proc 호스팅은 일부 확장에서 힙 손상을 일으켜 옵트인으로 격리 -->
+        <ContextMenu x:Key="ItemContextMenu">
+            <MenuItem Command="{Binding OpenItemCommand}"
+                      CommandParameter="{Binding SelectedItem}"
+                      FontWeight="SemiBold"
+                      Header="열기"
+                      InputGestureText="Enter" />
+            <Separator />
+            <MenuItem Command="{Binding CopySelectionCommand}" Header="복사" InputGestureText="Ctrl+C" />
+            <MenuItem Command="{Binding CutSelectionCommand}" Header="잘라내기" InputGestureText="Ctrl+X" />
+            <MenuItem Command="{Binding PasteCommand}" Header="붙여넣기" InputGestureText="Ctrl+V" />
+            <Separator />
+            <MenuItem Command="{Binding DeleteSelectionCommand}" Header="삭제" InputGestureText="Del" />
+            <MenuItem Command="{Binding BeginRenameCommand}" Header="이름 바꾸기" InputGestureText="F2" />
+            <Separator />
+            <MenuItem Click="OnShowNativeMenuClick" Header="Windows 메뉴 표시 (불안정 ⚠)" />
+            <MenuItem Click="OnShowPropertiesClick" Header="속성" />
+        </ContextMenu>
+    </UserControl.Resources>
     <Grid>
         <ListView x:Name="FileList"
                   AllowDrop="True"

@@ -16,6 +16,7 @@ public partial class FileListView : UserControl
     private Point _dragStartPoint;
     private bool _dragStartedOnItem;
     private bool _suppressBackgroundMenuOnce;
+    private Point _lastItemMenuScreenPoint;
     private ListViewItem? _dropHighlightedItem;
 
     public FileListView()
@@ -245,12 +246,36 @@ public partial class FileListView : UserControl
 
         e.Handled = true;
         _suppressBackgroundMenuOnce = true;
+        _lastItemMenuScreenPoint = PointToScreen(e.GetPosition(this));
 
-        var screen = PointToScreen(e.GetPosition(this));
+        // 자체 메뉴를 기본으로 연다 — 네이티브 메뉴는 메뉴 안의 옵트인 항목으로 제공.
+        if (Resources["ItemContextMenu"] is ContextMenu menu)
+        {
+            menu.DataContext = vm;
+            menu.PlacementTarget = FileList;
+            menu.IsOpen = true;
+        }
+    }
+
+    private void OnShowNativeMenuClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { } vm)
+        {
+            return;
+        }
+
         var paths = vm.SelectedItems.Select(i => i.Entry.FullPath).ToArray();
         if (paths.Length > 0)
         {
-            ContextMenuService.ShowMenu(paths, (int)screen.X, (int)screen.Y);
+            ContextMenuService.ShowMenu(paths, (int)_lastItemMenuScreenPoint.X, (int)_lastItemMenuScreenPoint.Y);
+        }
+    }
+
+    private void OnShowPropertiesClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is { SelectedItems: [{ } first, ..] })
+        {
+            ContextMenuService.ShowProperties(first.Entry.FullPath);
         }
     }
 

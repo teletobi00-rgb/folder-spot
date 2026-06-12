@@ -21,6 +21,9 @@ public interface IShellContextMenuService
     /// UI 스레드에서 호출해야 하며, 실제 작업은 idle 타임에 청크로 분산된다.
     /// </summary>
     void BeginWarmUp();
+
+    /// <summary>Windows 속성 다이얼로그를 연다 (IContextMenu 호스팅 없이 직접 API 호출 — 안전).</summary>
+    void ShowProperties(string path);
 }
 
 public sealed class ShellContextMenuService : IShellContextMenuService
@@ -84,6 +87,18 @@ public sealed class ShellContextMenuService : IShellContextMenuService
             {
                 item.Dispose();
             }
+        }
+    }
+
+    public void ShowProperties(string path)
+    {
+        try
+        {
+            Shell32.SHObjectProperties(HWND.NULL, Shell32.SHOP.SHOP_FILEPATH, PathUtils.Normalize(path), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "속성 다이얼로그 표시 실패: {Path}", path);
         }
     }
 

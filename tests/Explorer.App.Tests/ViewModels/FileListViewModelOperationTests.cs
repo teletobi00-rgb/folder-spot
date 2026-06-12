@@ -1,8 +1,11 @@
-using System.IO;
+﻿using System.IO;
+using Explorer.App.Services.Operations;
 using Explorer.App.ViewModels;
 using Explorer.Core.FileOperations;
 using Explorer.Core.FileSystem;
+using Explorer.Core.Operations;
 using Explorer.Core.Settings;
+using Explorer.Core.Undo;
 using Explorer.Shell.Icons;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -17,21 +20,29 @@ public sealed class FileListViewModelOperationTests
     private readonly IFileClipboardService _clipboard = Substitute.For<IFileClipboardService>();
     private readonly IFolderWatcher _watcher = Substitute.For<IFolderWatcher>();
     private readonly ISettingsService _settings = Substitute.For<ISettingsService>();
+    private readonly IOperationQueue _queue;
 
     public FileListViewModelOperationTests()
     {
         _settings.Current.Returns(new AppSettings());
-        _operations.CopyAsync(default!, default!).ReturnsForAnyArgs(FileOperationResult.Success());
-        _operations.MoveAsync(default!, default!).ReturnsForAnyArgs(FileOperationResult.Success());
-        _operations.DeleteAsync(default!, default).ReturnsForAnyArgs(FileOperationResult.Success());
+        _operations.CopyAsync(default!, default!, default).ReturnsForAnyArgs(FileOperationResult.Success());
+        _operations.MoveAsync(default!, default!, default).ReturnsForAnyArgs(FileOperationResult.Success());
+        _operations.DeleteAsync(default!, default, default).ReturnsForAnyArgs(FileOperationResult.Success());
         _operations.RenameAsync(default!, default!).ReturnsForAnyArgs(FileOperationResult.Success());
         _operations.CreateFolderAsync(default!, default!).ReturnsForAnyArgs(FileOperationResult.Success());
+
+        // 실제 큐+실행기 경유 — 테스트의 가짜 경로는 디스크에 없으므로 충돌 프롬프트는 절대 호출되지 않는다.
+        _queue = new OperationQueue(
+            new QueuedOperationExecutor(
+                _operations, Substitute.For<IConflictPrompt>(), new UndoService(),
+                NullLogger<QueuedOperationExecutor>.Instance),
+            NullLogger<OperationQueue>.Instance);
     }
 
     private FileListViewModel CreateViewModel() => new(
         _enumerator, Substitute.For<IFileLauncher>(), _settings, Substitute.For<IShellIconProvider>(),
         _operations, _clipboard, _watcher, Substitute.For<Explorer.Core.Favorites.IFavoritesService>(),
-        NullLogger<FileListViewModel>.Instance);
+        _queue, NullLogger<FileListViewModel>.Instance);
 
     private static FileEntry File(string name) => FileEntry.Create(
         @"C:\test\" + name, name, isDirectory: false, 10,
@@ -105,7 +116,7 @@ public sealed class FileListViewModelOperationTests
         await vm.PasteCommand.ExecuteAsync(null);
 
         await _operations.Received(1).CopyAsync(
-            Arg.Is<IReadOnlyList<string>>(p => p[0] == @"D:\src\x.txt"), @"C:\test");
+            Arg.Is<IReadOnlyList<string>>(p => p[0] == @"D:\src\x.txt"), @"C:\test", Arg.Any<FileOperationContext?>());
         ListCallCount().Should().Be(callsBefore + 1, "붙여넣기 후 새로고침");
     }
 
@@ -117,7 +128,7 @@ public sealed class FileListViewModelOperationTests
 
         await vm.PasteCommand.ExecuteAsync(null);
 
-        await _operations.Received(1).MoveAsync(Arg.Any<IReadOnlyList<string>>(), @"C:\test");
+        await _operations.Received(1).MoveAsync(Arg.Any<IReadOnlyList<string>>(), @"C:\test", Arg.Any<FileOperationContext?>());
         _clipboard.Received(1).Clear();
     }
 
@@ -131,7 +142,7 @@ public sealed class FileListViewModelOperationTests
         await vm.DeleteSelectionCommand.ExecuteAsync(null);
 
         await _operations.Received(1).DeleteAsync(
-            Arg.Is<IReadOnlyList<string>>(p => p.Single() == @"C:\test\a.txt"), permanent: false);
+            Arg.Is<IReadOnlyList<string>>(p => p.Single() == @"C:\test\a.txt"), false, Arg.Any<FileOperationContext?>());
         vm.Items.Select(i => i.Name).Should().Equal("b.txt");
         ListCallCount().Should().Be(callsBefore, "삭제는 타겟 업데이트만 하고 재나열하지 않는다");
     }
@@ -144,7 +155,7 @@ public sealed class FileListViewModelOperationTests
 
         await vm.DeleteSelectionPermanentCommand.ExecuteAsync(null);
 
-        await _operations.Received(1).DeleteAsync(Arg.Any<IReadOnlyList<string>>(), permanent: true);
+        await _operations.Received(1).DeleteAsync(Arg.Any<IReadOnlyList<string>>(), true, Arg.Any<FileOperationContext?>());
     }
 
     [Fact]
@@ -231,7 +242,7 @@ public sealed class FileListViewModelOperationTests
 
         await vm.HandleDropAsync([@"C:\test"], @"C:\test\sub", DropOperation.Move);
 
-        await _operations.DidNotReceiveWithAnyArgs().MoveAsync(default!, default!);
+        await _operations.DidNotReceiveWithAnyArgs().MoveAsync(default!, default!, default);
     }
 
     [Fact]
@@ -243,7 +254,7 @@ public sealed class FileListViewModelOperationTests
         await vm.HandleDropAsync([@"D:\src\x.txt"], @"C:\test", DropOperation.Move);
 
         await _operations.Received(1).MoveAsync(
-            Arg.Is<IReadOnlyList<string>>(p => p.Single() == @"D:\src\x.txt"), @"C:\test");
+            Arg.Is<IReadOnlyList<string>>(p => p.Single() == @"D:\src\x.txt"), @"C:\test", Arg.Any<FileOperationContext?>());
         ListCallCount().Should().Be(callsBefore + 1);
     }
 

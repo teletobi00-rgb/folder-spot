@@ -23,6 +23,8 @@ public sealed class FileListViewModelTests
     private readonly IFileClipboardService _clipboard = Substitute.For<IFileClipboardService>();
     private readonly IFolderWatcher _watcher = Substitute.For<IFolderWatcher>();
     private readonly IFavoritesService _favorites = Substitute.For<IFavoritesService>();
+    private readonly Explorer.Core.Operations.IOperationQueue _queue =
+        Substitute.For<Explorer.Core.Operations.IOperationQueue>();
 
     public FileListViewModelTests()
     {
@@ -30,7 +32,7 @@ public sealed class FileListViewModelTests
     }
 
     private FileListViewModel CreateViewModel() => new(
-        _enumerator, _launcher, _settings, _icons, _operations, _clipboard, _watcher, _favorites,
+        _enumerator, _launcher, _settings, _icons, _operations, _clipboard, _watcher, _favorites, _queue,
         NullLogger<FileListViewModel>.Instance);
 
     private static FileEntry File(string name, bool hidden = false) => FileEntry.Create(

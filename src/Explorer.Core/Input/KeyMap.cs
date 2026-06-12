@@ -26,6 +26,7 @@ public static class KeyActions
     public const string CopyToOtherPane = "Workspace.CopyToOther";
     public const string MoveToOtherPane = "Workspace.MoveToOther";
     public const string OpenInOtherPane = "Workspace.OpenInOther";
+    public const string Undo = "Edit.Undo";
 }
 
 /// <summary>
@@ -49,6 +50,7 @@ public sealed class KeyMap
         [KeyActions.CopyToOtherPane] = "F5",
         [KeyActions.MoveToOtherPane] = "F6",
         [KeyActions.OpenInOtherPane] = "Ctrl+Right;Ctrl+Left",
+        [KeyActions.Undo] = "Ctrl+Z",
     };
 
     private KeyMap(Dictionary<string, string> bindings)

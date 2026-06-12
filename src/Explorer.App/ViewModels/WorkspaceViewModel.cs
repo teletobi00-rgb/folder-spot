@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Explorer.Core.FileSystem;
+using Explorer.Core.Undo;
 using Explorer.Core.Workspace;
 
 namespace Explorer.App.ViewModels;
@@ -27,9 +28,13 @@ public sealed partial class WorkspaceViewModel : ObservableObject, IDisposable
     private PaneViewModel _leftPane;
     private PaneViewModel _rightPane;
 
-    public WorkspaceViewModel(Func<FileListViewModel> fileListFactory)
+    private readonly IUndoService _undo;
+
+    public WorkspaceViewModel(Func<FileListViewModel> fileListFactory, IUndoService undo)
     {
         ArgumentNullException.ThrowIfNull(fileListFactory);
+        ArgumentNullException.ThrowIfNull(undo);
+        _undo = undo;
 
         // 두 페인 모두 즉시 생성한다(VM 할당은 가볍다). 지연되는 것은 우측 페인의 "탐색"으로,
         // 듀얼 모드를 처음 켤 때 ActivateCurrentTabAsync가 수행한다.
@@ -147,6 +152,27 @@ public sealed partial class WorkspaceViewModel : ObservableObject, IDisposable
         if (path is not null)
         {
             await InactivePane.FileList.NavigateToAsync(path);
+        }
+    }
+
+    /// <summary>Ctrl+Z — 마지막 파일 작업 되돌리기.</summary>
+    [RelayCommand]
+    private async Task UndoAsync()
+    {
+        if (await _undo.TryUndoAsync() is not { } undone)
+        {
+            ActiveFileList.StatusMessage = "되돌릴 작업이 없습니다.";
+            return;
+        }
+
+        ActiveFileList.StatusMessage = undone.Result.Succeeded
+            ? $"되돌렸습니다: {undone.Description}"
+            : $"되돌리기 실패 ({undone.Description}): {undone.Result.Message ?? "오류"}";
+
+        await ActiveFileList.RefreshCommand.ExecuteAsync(null);
+        if (IsDualMode)
+        {
+            await InactivePane.FileList.RefreshCommand.ExecuteAsync(null);
         }
     }
 

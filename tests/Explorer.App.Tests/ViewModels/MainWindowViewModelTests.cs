@@ -23,12 +23,13 @@ public sealed class MainWindowViewModelTests
         _context.Settings.Update(Arg.Any<Func<AppSettings, AppSettings>>())
             .Returns(call => call.Arg<Func<AppSettings, AppSettings>>()(_context.Settings.Current));
 
-        var workspace = new WorkspaceViewModel(_context.CreateFileList);
+        var workspace = new WorkspaceViewModel(_context.CreateFileList, _context.Undo);
         var sidebar = new DriveSidebarViewModel(_driveProvider);
         var favorites = new FavoritesViewModel(
             _context.Favorites, Substitute.For<IFileLauncher>(), NullLogger<FavoritesViewModel>.Instance);
+        var operationQueue = new OperationQueueViewModel(_context.Queue);
         return new MainWindowViewModel(
-            _context.Settings, _themeService, workspace, sidebar, favorites, KeyMap.CreateDefault());
+            _context.Settings, _themeService, workspace, sidebar, favorites, operationQueue, KeyMap.CreateDefault());
     }
 
     [Fact]

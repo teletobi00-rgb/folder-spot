@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Interop;
 using Explorer.App.Services;
+using Explorer.App.Services.Operations;
 using Explorer.App.ViewModels;
 using Explorer.App.Views;
 using Explorer.Core;
@@ -10,7 +11,9 @@ using Explorer.Core.FileOperations;
 using Explorer.Core.Favorites;
 using Explorer.Core.FileSystem;
 using Explorer.Core.Input;
+using Explorer.Core.Operations;
 using Explorer.Core.Settings;
+using Explorer.Core.Undo;
 using Explorer.Shell.Clipboard;
 using Explorer.Shell.ContextMenu;
 using Explorer.Shell.Drives;
@@ -83,16 +86,26 @@ public partial class App : Application
             AppPaths.FavoritesFile,
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<JsonFavoritesService>>()));
         services.AddSingleton(KeyMap.LoadWithOverrides(AppPaths.KeymapFile));
+
+        // 작업 큐 파이프라인: 큐(직렬 워커) → 실행기(충돌 해소 + 셸 호출 + Undo 기록)
+        services.AddSingleton<IUndoService, UndoService>();
+        services.AddSingleton<IConflictPrompt, DialogConflictPrompt>();
+        services.AddSingleton<IQueuedOperationExecutor, QueuedOperationExecutor>();
+        services.AddSingleton<IOperationQueue>(provider => new OperationQueue(
+            provider.GetRequiredService<IQueuedOperationExecutor>(),
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<OperationQueue>>()));
         // 와처는 소유 VM이 수명을 관리한다 — 페인마다 하나씩 갖도록 transient (Phase 3 듀얼 페인 대비).
         services.AddTransient<IFolderWatcher>(provider => new FileSystemFolderWatcher(
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FileSystemFolderWatcher>>()));
 
         // 페인마다 독립 파일 목록을 가지므로 transient — WorkspaceViewModel이 팩토리로 생성/소유한다.
         services.AddTransient<FileListViewModel>();
-        services.AddSingleton<WorkspaceViewModel>(provider =>
-            new WorkspaceViewModel(provider.GetRequiredService<FileListViewModel>));
+        services.AddSingleton<WorkspaceViewModel>(provider => new WorkspaceViewModel(
+            provider.GetRequiredService<FileListViewModel>,
+            provider.GetRequiredService<IUndoService>()));
         services.AddSingleton<DriveSidebarViewModel>();
         services.AddSingleton<FavoritesViewModel>();
+        services.AddSingleton<OperationQueueViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
     }

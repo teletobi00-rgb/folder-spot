@@ -2,6 +2,7 @@ using System.IO;
 using CommunityToolkit.Mvvm.Input;
 using Explorer.Core.FileOperations;
 using Explorer.Core.FileSystem;
+using Explorer.Core.Operations;
 using Explorer.Core.Sorting;
 using Microsoft.Extensions.Logging;
 
@@ -57,9 +58,9 @@ public sealed partial class FileListViewModel
             return;
         }
 
-        var result = await RunOperationAsync(() => content.IsCut
-            ? _operations.MoveAsync(content.Paths, destination)
-            : _operations.CopyAsync(content.Paths, destination));
+        var result = await RunOperationAsync(() => _queue.EnqueueAsync(content.IsCut
+            ? OperationRequest.Move(content.Paths, destination)
+            : OperationRequest.Copy(content.Paths, destination)));
 
         if (result.Succeeded)
         {
@@ -191,9 +192,9 @@ public sealed partial class FileListViewModel
             return;
         }
 
-        var result = await RunOperationAsync(() => operation == DropOperation.Move
-            ? _operations.MoveAsync(sourcePaths, targetDir)
-            : _operations.CopyAsync(sourcePaths, targetDir));
+        var result = await RunOperationAsync(() => _queue.EnqueueAsync(operation == DropOperation.Move
+            ? OperationRequest.Move(sourcePaths, targetDir)
+            : OperationRequest.Copy(sourcePaths, targetDir)));
 
         if (result.Succeeded)
         {
@@ -210,7 +211,7 @@ public sealed partial class FileListViewModel
         }
 
         var paths = targets.Select(t => t.Entry.FullPath).ToArray();
-        var result = await RunOperationAsync(() => _operations.DeleteAsync(paths, permanent));
+        var result = await RunOperationAsync(() => _queue.EnqueueAsync(OperationRequest.Delete(paths, permanent)));
         if (result.Succeeded)
         {
             RemoveItems(targets);

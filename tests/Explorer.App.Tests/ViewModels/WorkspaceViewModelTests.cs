@@ -1,4 +1,4 @@
-using Explorer.App.Tests.TestSupport;
+﻿using Explorer.App.Tests.TestSupport;
 using Explorer.App.ViewModels;
 using Explorer.Core.FileSystem;
 using Explorer.Core.Workspace;
@@ -12,7 +12,7 @@ public sealed class WorkspaceViewModelTests
 {
     private readonly FileListTestContext _context = new();
 
-    private WorkspaceViewModel CreateWorkspace() => new(_context.CreateFileList);
+    private WorkspaceViewModel CreateWorkspace() => new(_context.CreateFileList, Substitute.For<Explorer.Core.Undo.IUndoService>());
 
     [Fact]
     public void Ctor_StartsSinglePaneLeftActive()
@@ -184,7 +184,8 @@ public sealed class WorkspaceViewModelTests
 
         await _context.Operations.Received(1).CopyAsync(
             Arg.Is<IReadOnlyList<string>>(p => p.SequenceEqual(expected)),
-            @"C:\dst");
+            @"C:\dst",
+            Arg.Any<Explorer.Core.FileOperations.FileOperationContext?>());
     }
 
     [Fact]
@@ -198,7 +199,8 @@ public sealed class WorkspaceViewModelTests
 
         await _context.Operations.Received(1).MoveAsync(
             Arg.Is<IReadOnlyList<string>>(p => p.SequenceEqual(expected)),
-            @"C:\dst");
+            @"C:\dst",
+            Arg.Any<Explorer.Core.FileOperations.FileOperationContext?>());
     }
 
     [Fact]

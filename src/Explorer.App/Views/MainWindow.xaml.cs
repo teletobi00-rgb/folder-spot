@@ -29,6 +29,7 @@ public partial class MainWindow : FluentWindow
         [KeyActions.CopyToOtherPane] = "Workspace.CopyToOtherPaneCommand",
         [KeyActions.MoveToOtherPane] = "Workspace.MoveToOtherPaneCommand",
         [KeyActions.OpenInOtherPane] = "Workspace.OpenInOtherPaneCommand",
+        [KeyActions.Undo] = "Workspace.UndoCommand",
     };
 
     private readonly MainWindowViewModel _viewModel;

@@ -22,6 +22,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <ui:TitleBar Grid.Row="0" Title="Explorer" />
@@ -190,8 +191,107 @@
             </Grid>
         </Grid>
 
+        <!-- 작업 큐 패널 -->
+        <Border Grid.Row="3"
+                Margin="8,6,8,0"
+                Padding="10,6"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                CornerRadius="6"
+                Visibility="{Binding OperationQueue.HasItems, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock FontSize="12" FontWeight="SemiBold" Opacity="0.7">
+                        <Run Text="작업" /><Run Text=" (" /><Run Text="{Binding OperationQueue.ActiveCount, Mode=OneWay}" /><Run Text="개 진행 중)" />
+                    </TextBlock>
+                    <ui:Button Grid.Column="1"
+                               Padding="6,0"
+                               FontSize="11"
+                               Command="{Binding OperationQueue.ClearFinishedCommand}"
+                               Content="목록 정리" />
+                </Grid>
+
+                <ScrollViewer Grid.Row="1"
+                              MaxHeight="150"
+                              VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding OperationQueue.Items}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <TextBlock FontSize="12"
+                                                   Text="{Binding Description}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                        <TextBlock FontSize="11"
+                                                   Opacity="0.6"
+                                                   Text="{Binding DetailText}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1"
+                                                Margin="8,0"
+                                                VerticalAlignment="Center">
+                                        <ProgressBar Height="6"
+                                                     IsIndeterminate="{Binding IsIndeterminate}"
+                                                     Maximum="100"
+                                                     Value="{Binding Percent, Mode=OneWay}" />
+                                        <TextBlock FontSize="11"
+                                                   HorizontalAlignment="Center"
+                                                   Opacity="0.6"
+                                                   Text="{Binding StateText}"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="2"
+                                                VerticalAlignment="Center"
+                                                Orientation="Horizontal">
+                                        <Button Padding="6,2"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Command="{Binding PauseCommand}"
+                                                Content="⏸"
+                                                ToolTip="일시정지"
+                                                Visibility="{Binding CanPause, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        <Button Padding="6,2"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Command="{Binding ResumeCommand}"
+                                                Content="▶"
+                                                ToolTip="재개"
+                                                Visibility="{Binding CanResume, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        <Button Padding="6,2"
+                                                Background="Transparent"
+                                                BorderThickness="0"
+                                                Command="{Binding CancelCommand}"
+                                                Content="✕"
+                                                ToolTip="취소"
+                                                Visibility="{Binding IsRunning, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
         <!-- 상태바 -->
-        <Grid Grid.Row="3" Margin="12,4,12,6">
+        <Grid Grid.Row="4" Margin="12,4,12,6">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />

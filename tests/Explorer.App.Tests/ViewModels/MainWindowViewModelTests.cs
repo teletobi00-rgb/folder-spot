@@ -1,5 +1,6 @@
 using Explorer.App.Services;
 using Explorer.App.ViewModels;
+using Explorer.Core.FileOperations;
 using Explorer.Core.FileSystem;
 using Explorer.Core.Settings;
 using Explorer.Shell.Icons;
@@ -29,6 +30,9 @@ public sealed class MainWindowViewModelTests
             Substitute.For<IFileLauncher>(),
             _settings,
             Substitute.For<IShellIconProvider>(),
+            Substitute.For<IFileOperationService>(),
+            Substitute.For<IFileClipboardService>(),
+            Substitute.For<IFolderWatcher>(),
             NullLogger<FileListViewModel>.Instance);
         var sidebar = new DriveSidebarViewModel(_driveProvider);
         return new MainWindowViewModel(_settings, _themeService, fileList, sidebar);

@@ -71,6 +71,11 @@ View — 수동 검증
 ## Phase 2: 쓰기 작업 + 셸 통합
 
 **목표:** 복사/이동/삭제(휴지통)/이름변경/새 폴더 + 우클릭 셸 메뉴 + 탐색기 양방향 D&D.
+> ✅ 2026-06-12 완료. 테스트 204개(실제 IFileOperation 통합 테스트 포함).
+> 구현 노트: Phase 2는 셸 네이티브 진행/충돌 다이얼로그 사용(자체 큐 UI는 Phase 5에서 대체).
+> 추가 구현: FileSystemWatcher 기반 현재 폴더 자동 새로고침(디바운스 400ms + 자체 작업 에코 억제 800ms) —
+> 네이티브 메뉴 verb 실행처럼 VM을 우회하는 변경도 목록에 반영되도록.
+> 리뷰에서 잡은 핵심 버그: 큐잉된 ShellItem COM 객체를 PerformOperations 전에 dispose하던 수명 문제(CRITICAL) 수정.
 
 작업 엔진
 - [ ] 2.1 `IFileOperationService` 계약 (진행·취소·결과) — **TDD**

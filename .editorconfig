@@ -26,6 +26,8 @@ dotnet_style_readonly_field = true:warning
 dotnet_diagnostic.CA1848.severity = none
 dotnet_diagnostic.CA1873.severity = none
 
-# 테스트 코드: Method_Scenario_Expectation 밑줄 네이밍은 xUnit 표준 관례
+# 테스트 코드: Method_Scenario_Expectation 밑줄 네이밍은 xUnit 표준 관례,
+# 예약 예외 타입(COMException 등) 생성은 매퍼 검증에 필요
 [tests/**.cs]
 dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA2201.severity = none

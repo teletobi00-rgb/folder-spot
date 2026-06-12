@@ -10,7 +10,7 @@ using Explorer.Shell.Icons;
 namespace Explorer.App.ViewModels;
 
 /// <summary>목록 한 행. 표시 문자열은 첫 접근 시 계산하고, 아이콘은 행이 실제로 그려질 때 지연 로드한다.</summary>
-public sealed class FileItemViewModel : ObservableObject
+public sealed partial class FileItemViewModel : ObservableObject
 {
     private readonly IShellIconProvider _iconProvider;
     private string? _sizeText;
@@ -18,6 +18,19 @@ public sealed class FileItemViewModel : ObservableObject
     private string? _attributesText;
     private ImageSource? _icon;
     private bool _iconRequested;
+
+    /// <summary>잘라내기 표시 상태 (시각적 흐림 처리용).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(NameOpacity))]
+    private bool _isCut;
+
+    /// <summary>인라인 이름 변경 편집 중 여부.</summary>
+    [ObservableProperty]
+    private bool _isRenaming;
+
+    /// <summary>이름 변경 편집 텍스트.</summary>
+    [ObservableProperty]
+    private string _editName = string.Empty;
 
     public FileItemViewModel(FileEntry entry, IShellIconProvider iconProvider)
     {
@@ -34,6 +47,8 @@ public sealed class FileItemViewModel : ObservableObject
     public string Extension => Entry.Extension;
 
     public bool IsDirectory => Entry.IsDirectory;
+
+    public double NameOpacity => IsCut ? 0.5 : 1.0;
 
     public string SizeText => _sizeText ??= Entry.IsDirectory ? string.Empty : FileSizeFormatter.Format(Entry.Size);
 

@@ -2,13 +2,22 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Explorer.App.ViewModels;
+using Explorer.Core.FileSystem;
 using Explorer.Core.Sorting;
+using Explorer.Shell.ContextMenu;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Explorer.App.Views;
 
 public partial class FileListView : UserControl
 {
+    private Point _dragStartPoint;
+    private bool _dragStartedOnItem;
+    private bool _suppressBackgroundMenuOnce;
+    private ListViewItem? _dropHighlightedItem;
+
     public FileListView()
     {
         InitializeComponent();
@@ -16,6 +25,9 @@ public partial class FileListView : UserControl
     }
 
     private FileListViewModel? ViewModel => DataContext as FileListViewModel;
+
+    private static IShellContextMenuService ContextMenuService =>
+        App.Services.GetRequiredService<IShellContextMenuService>();
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
@@ -87,6 +99,219 @@ public partial class FileListView : UserControl
         }
     }
 
+    private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (ViewModel is not null)
+        {
+            ViewModel.SelectedItems = FileList.SelectedItems.Cast<FileItemViewModel>().ToArray();
+        }
+    }
+
+    // ─── 드래그 시작 (앱 → 탐색기/다른 곳) ─────────────────────────────────────────
+
+    private void OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        _dragStartPoint = e.GetPosition(this);
+
+        // Shift/Ctrl 클릭은 다중 선택 제스처 — 드래그 시작으로 취급하면 선택 확장이 깨진다.
+        _dragStartedOnItem = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) == 0
+            && e.OriginalSource is DependencyObject source
+            && e.OriginalSource is not System.Windows.Controls.TextBox
+            && FindAncestor<ListViewItem>(source) is not null;
+    }
+
+    private void OnPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_dragStartedOnItem
+            || e.LeftButton != MouseButtonState.Pressed
+            || ViewModel is not { SelectedItems.Count: > 0 } vm)
+        {
+            return;
+        }
+
+        var delta = e.GetPosition(this) - _dragStartPoint;
+        if (Math.Abs(delta.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(delta.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        _dragStartedOnItem = false;
+        var paths = vm.SelectedItems.Select(i => i.Entry.FullPath).ToArray();
+        var data = new DataObject(DataFormats.FileDrop, paths);
+        DragDrop.DoDragDrop(FileList, data, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+    }
+
+    // ─── 드롭 수신 (탐색기/다른 곳 → 앱) ─────────────────────────────────────────
+
+    private void OnDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = DragDropEffects.None;
+        e.Handled = true;
+
+        if (ResolveDrop(e) is not { } resolved)
+        {
+            ClearDropHighlight();
+            return;
+        }
+
+        e.Effects = resolved.Operation == DropOperation.Move ? DragDropEffects.Move : DragDropEffects.Copy;
+        UpdateDropHighlight(resolved.TargetItem);
+    }
+
+    private void OnDrop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        ClearDropHighlight();
+
+        if (ResolveDrop(e) is { } resolved && ViewModel is { } vm)
+        {
+            _ = vm.HandleDropAsync(resolved.Paths, resolved.TargetDir, resolved.Operation);
+        }
+    }
+
+    private void OnDragLeave(object sender, DragEventArgs e) => ClearDropHighlight();
+
+    private (string[] Paths, string TargetDir, DropOperation Operation, ListViewItem? TargetItem)? ResolveDrop(DragEventArgs e)
+    {
+        if (ViewModel is not { CurrentPath: { } currentPath }
+            || !e.Data.GetDataPresent(DataFormats.FileDrop)
+            || e.Data.GetData(DataFormats.FileDrop) is not string[] { Length: > 0 } paths)
+        {
+            return null;
+        }
+
+        // 폴더 행 위에 드롭하면 그 폴더가, 아니면 현재 폴더가 대상이다.
+        ListViewItem? targetItem = null;
+        var targetDir = currentPath;
+        if (e.OriginalSource is DependencyObject source
+            && FindAncestor<ListViewItem>(source) is { DataContext: FileItemViewModel { IsDirectory: true } dirItem } item)
+        {
+            targetItem = item;
+            targetDir = dirItem.Entry.FullPath;
+        }
+
+        var operation = DropRules.Resolve(
+            copyModifier: (e.KeyStates & DragDropKeyStates.ControlKey) != 0,
+            moveModifier: (e.KeyStates & DragDropKeyStates.ShiftKey) != 0,
+            sameVolume: DropRules.IsSameVolume(paths[0], targetDir));
+
+        return DropRules.CanDrop(paths, targetDir, operation)
+            ? (paths, targetDir, operation, targetItem)
+            : null;
+    }
+
+    private void UpdateDropHighlight(ListViewItem? item)
+    {
+        // Recycling 가상화에서 컨테이너가 재사용되므로 컨테이너+데이터 쌍으로 동일성을 판단한다.
+        if (ReferenceEquals(_dropHighlightedItem, item)
+            && ReferenceEquals(_dropHighlightedItem?.DataContext, item?.DataContext))
+        {
+            return;
+        }
+
+        ClearDropHighlight();
+        if (item is not null)
+        {
+            _dropHighlightedItem = item;
+            item.Background = SystemColors.AccentColorLight2Brush;
+        }
+    }
+
+    private void ClearDropHighlight()
+    {
+        // 저장해둔 브러시 복원 대신 ClearValue — 재활용된 컨테이너에 낡은 브러시를 칠하는 문제를 차단한다.
+        _dropHighlightedItem?.ClearValue(BackgroundProperty);
+        _dropHighlightedItem = null;
+    }
+
+    // ─── 컨텍스트 메뉴 ───────────────────────────────────────────────────────────
+
+    private void OnMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (ViewModel is not { } vm
+            || e.OriginalSource is not DependencyObject source
+            || FindAncestor<ListViewItem>(source) is not { DataContext: FileItemViewModel item } container)
+        {
+            return; // 빈 영역 — WPF 배경 ContextMenu가 열린다
+        }
+
+        // 선택 밖의 항목을 우클릭하면 그 항목만 선택 (탐색기 동작)
+        if (!FileList.SelectedItems.Contains(item))
+        {
+            FileList.SelectedItems.Clear();
+            container.IsSelected = true;
+        }
+
+        e.Handled = true;
+        _suppressBackgroundMenuOnce = true;
+
+        var screen = PointToScreen(e.GetPosition(this));
+        var paths = vm.SelectedItems.Select(i => i.Entry.FullPath).ToArray();
+        if (paths.Length > 0)
+        {
+            ContextMenuService.ShowMenu(paths, (int)screen.X, (int)screen.Y);
+        }
+    }
+
+    private void OnContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (_suppressBackgroundMenuOnce)
+        {
+            _suppressBackgroundMenuOnce = false;
+            e.Handled = true;
+        }
+    }
+
+    // ─── 인라인 이름 변경 ────────────────────────────────────────────────────────
+
+    private void OnRenameBoxLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.TextBox box
+            || box.DataContext is not FileItemViewModel { IsRenaming: true } item)
+        {
+            return;
+        }
+
+        box.Focus();
+
+        // 확장자를 제외한 이름 부분만 선택한다 (탐색기 동작)
+        var dotIndex = item.IsDirectory ? -1 : box.Text.LastIndexOf('.');
+        box.Select(0, dotIndex > 0 ? dotIndex : box.Text.Length);
+    }
+
+    private void OnRenameBoxKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.TextBox box
+            || box.DataContext is not FileItemViewModel item
+            || ViewModel is not { } vm)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            vm.CommitRenameCommand.Execute(item);
+            FileList.Focus();
+        }
+        else if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            vm.CancelRenameCommand.Execute(item);
+            FileList.Focus();
+        }
+    }
+
+    private void OnRenameBoxLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox { DataContext: FileItemViewModel { IsRenaming: true } item }
+            && ViewModel is { } vm)
+        {
+            vm.CommitRenameCommand.Execute(item);
+        }
+    }
+
     private static T? FindAncestor<T>(DependencyObject? current)
         where T : DependencyObject
     {
@@ -97,8 +322,8 @@ public partial class FileListView : UserControl
                 return match;
             }
 
-            current = current is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D
-                ? System.Windows.Media.VisualTreeHelper.GetParent(current)
+            current = current is Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(current)
                 : LogicalTreeHelper.GetParent(current);
         }
 

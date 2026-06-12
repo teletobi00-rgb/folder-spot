@@ -9,6 +9,7 @@
              d:DataContext="{d:DesignInstance Type=viewmodels:FileListViewModel}">
     <Grid>
         <ListView x:Name="FileList"
+                  AllowDrop="True"
                   ItemsSource="{Binding Items}"
                   SelectedItem="{Binding SelectedItem}"
                   SelectionMode="Extended"
@@ -16,19 +17,48 @@
                   VirtualizingPanel.VirtualizationMode="Recycling"
                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
                   GridViewColumnHeader.Click="OnColumnHeaderClick"
-                  MouseDoubleClick="OnItemDoubleClick">
+                  MouseDoubleClick="OnItemDoubleClick"
+                  SelectionChanged="OnSelectionChanged"
+                  PreviewMouseLeftButtonDown="OnPreviewMouseLeftButtonDown"
+                  PreviewMouseMove="OnPreviewMouseMove"
+                  MouseRightButtonUp="OnMouseRightButtonUp"
+                  ContextMenuOpening="OnContextMenuOpening"
+                  DragOver="OnDragOver"
+                  Drop="OnDrop"
+                  DragLeave="OnDragLeave">
             <ListView.InputBindings>
                 <KeyBinding Key="Return"
                             Command="{Binding OpenItemCommand}"
                             CommandParameter="{Binding SelectedItem}" />
                 <KeyBinding Key="Back" Command="{Binding GoUpCommand}" />
+                <KeyBinding Modifiers="Ctrl" Key="C" Command="{Binding CopySelectionCommand}" />
+                <KeyBinding Modifiers="Ctrl" Key="X" Command="{Binding CutSelectionCommand}" />
+                <KeyBinding Modifiers="Ctrl" Key="V" Command="{Binding PasteCommand}" />
+                <KeyBinding Key="Delete" Command="{Binding DeleteSelectionCommand}" />
+                <KeyBinding Modifiers="Shift" Key="Delete" Command="{Binding DeleteSelectionPermanentCommand}" />
+                <KeyBinding Key="F2" Command="{Binding BeginRenameCommand}" />
+                <KeyBinding Key="F7" Command="{Binding CreateFolderCommand}" />
             </ListView.InputBindings>
+            <ListView.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Command="{Binding PasteCommand}"
+                              Header="붙여넣기"
+                              InputGestureText="Ctrl+V" />
+                    <MenuItem Command="{Binding CreateFolderCommand}"
+                              Header="새 폴더"
+                              InputGestureText="F7" />
+                    <Separator />
+                    <MenuItem Command="{Binding RefreshCommand}"
+                              Header="새로 고침"
+                              InputGestureText="Ctrl+R" />
+                </ContextMenu>
+            </ListView.ContextMenu>
             <ListView.View>
                 <GridView>
                     <GridViewColumn x:Name="NameColumn" Header="이름" Width="340">
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
-                                <StackPanel Orientation="Horizontal">
+                                <StackPanel Opacity="{Binding NameOpacity}" Orientation="Horizontal">
                                     <Image Width="16"
                                            Height="16"
                                            Margin="0,0,8,0"
@@ -36,7 +66,15 @@
                                            Source="{Binding Icon}" />
                                     <TextBlock VerticalAlignment="Center"
                                                Text="{Binding Name}"
-                                               TextTrimming="CharacterEllipsis" />
+                                               TextTrimming="CharacterEllipsis"
+                                               Visibility="{Binding IsRenaming, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                    <TextBox MinWidth="160"
+                                             VerticalAlignment="Center"
+                                             KeyDown="OnRenameBoxKeyDown"
+                                             Loaded="OnRenameBoxLoaded"
+                                             LostFocus="OnRenameBoxLostFocus"
+                                             Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                             Visibility="{Binding IsRenaming, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                 </StackPanel>
                             </DataTemplate>
                         </GridViewColumn.CellTemplate>

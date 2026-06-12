@@ -53,4 +53,15 @@ public sealed class PathUtilsTests
     {
         PathUtils.GetParent(@"\\server\share").Should().BeNull();
     }
+
+    [Theory]
+    [InlineData(@"C:\data", @"C:\data", true)]
+    [InlineData(@"C:\data", @"C:\DATA\sub\file.txt", true)]
+    [InlineData(@"C:\data", @"C:\data2", false)]
+    [InlineData(@"C:\data\sub", @"C:\data", false)]
+    [InlineData(@"C:\data\", @"C:\data\sub", true)]
+    public void IsSameOrDescendant_ChecksAncestry(string ancestor, string path, bool expected)
+    {
+        PathUtils.IsSameOrDescendant(ancestor, path).Should().Be(expected);
+    }
 }

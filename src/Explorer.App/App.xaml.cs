@@ -1,13 +1,18 @@
 using System.Globalization;
 using System.IO;
 using System.Windows;
+using System.Windows.Interop;
 using Explorer.App.Services;
 using Explorer.App.ViewModels;
 using Explorer.App.Views;
 using Explorer.Core;
+using Explorer.Core.FileOperations;
 using Explorer.Core.FileSystem;
 using Explorer.Core.Settings;
+using Explorer.Shell.Clipboard;
+using Explorer.Shell.ContextMenu;
 using Explorer.Shell.Drives;
+using Explorer.Shell.FileOperations;
 using Explorer.Shell.Icons;
 using Explorer.Shell.Launch;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,6 +25,9 @@ namespace Explorer.App;
 public partial class App : Application
 {
     private readonly IHost _host;
+
+    /// <summary>View 계층의 글루 코드용 서비스 접근점 (ViewModel은 생성자 주입을 쓴다).</summary>
+    public static IServiceProvider Services => ((App)Current)._host.Services;
 
     public App()
     {
@@ -64,6 +72,14 @@ public partial class App : Application
         services.AddSingleton<IDriveProvider, DriveInfoDriveProvider>();
         services.AddSingleton<IFileLauncher, ShellFileLauncher>();
         services.AddSingleton<IShellIconProvider, ShellIconProvider>();
+        services.AddSingleton<IFileOperationService>(provider => new ShellFileOperationService(
+            () => Current?.MainWindow is { } window ? new WindowInteropHelper(window).Handle : 0,
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ShellFileOperationService>>()));
+        services.AddSingleton<IFileClipboardService, WpfFileClipboardService>();
+        services.AddSingleton<IShellContextMenuService, ShellContextMenuService>();
+        // 와처는 소유 VM이 수명을 관리한다 — 페인마다 하나씩 갖도록 transient (Phase 3 듀얼 페인 대비).
+        services.AddTransient<IFolderWatcher>(provider => new FileSystemFolderWatcher(
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FileSystemFolderWatcher>>()));
 
         services.AddSingleton<FileListViewModel>();
         services.AddSingleton<DriveSidebarViewModel>();

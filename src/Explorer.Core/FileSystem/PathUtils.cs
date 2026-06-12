@@ -41,4 +41,21 @@ public static class PathUtils
 
     /// <summary>부모 디렉터리 경로. 루트(드라이브/UNC 공유)면 null.</summary>
     public static string? GetParent(string path) => Path.GetDirectoryName(Normalize(path));
+
+    /// <summary>path가 ancestor 자신이거나 그 하위 경로인지 (대소문자 무시).</summary>
+    public static bool IsSameOrDescendant(string ancestor, string path)
+    {
+        var normalizedAncestor = Normalize(ancestor);
+        var normalizedPath = Normalize(path);
+
+        if (string.Equals(normalizedAncestor, normalizedPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var prefix = normalizedAncestor.EndsWith(Path.DirectorySeparatorChar)
+            ? normalizedAncestor
+            : normalizedAncestor + Path.DirectorySeparatorChar;
+        return normalizedPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+    }
 }

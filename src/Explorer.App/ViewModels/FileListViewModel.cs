@@ -1,6 +1,7 @@
-﻿using System.IO;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Explorer.Core.FileOperations;
 using Explorer.Core.FileSystem;
 using Explorer.Core.Navigation;
 using Explorer.Core.Settings;
@@ -19,13 +20,21 @@ public enum FileListStatus
     Error,
 }
 
+/// <summary>
+/// 한 페인의 파일 목록 상태. 네비게이션/로딩 로직은 이 파일에, 파일 작업 명령은
+/// FileListViewModel.Operations.cs 파셜에 있다. 모든 공개 멤버는 UI 스레드에서만 호출한다.
+/// </summary>
 public sealed partial class FileListViewModel : ObservableObject, IDisposable
 {
     private readonly IFileSystemEnumerator _enumerator;
     private readonly IFileLauncher _launcher;
     private readonly ISettingsService _settings;
     private readonly IShellIconProvider _iconProvider;
+    private readonly IFileOperationService _operations;
+    private readonly IFileClipboardService _clipboard;
+    private readonly IFolderWatcher _folderWatcher;
     private readonly ILogger<FileListViewModel> _logger;
+    private readonly SynchronizationContext? _uiContext;
     private CancellationTokenSource? _loadCts;
 
     [ObservableProperty]
@@ -36,6 +45,9 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private FileItemViewModel? _selectedItem;
+
+    [ObservableProperty]
+    private IReadOnlyList<FileItemViewModel> _selectedItems = [];
 
     [ObservableProperty]
     private bool _isLoading;
@@ -54,24 +66,37 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
         IFileLauncher launcher,
         ISettingsService settings,
         IShellIconProvider iconProvider,
+        IFileOperationService operations,
+        IFileClipboardService clipboard,
+        IFolderWatcher folderWatcher,
         ILogger<FileListViewModel> logger)
     {
         ArgumentNullException.ThrowIfNull(enumerator);
         ArgumentNullException.ThrowIfNull(launcher);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(iconProvider);
+        ArgumentNullException.ThrowIfNull(operations);
+        ArgumentNullException.ThrowIfNull(clipboard);
+        ArgumentNullException.ThrowIfNull(folderWatcher);
         ArgumentNullException.ThrowIfNull(logger);
         _enumerator = enumerator;
         _launcher = launcher;
         _settings = settings;
         _iconProvider = iconProvider;
+        _operations = operations;
+        _clipboard = clipboard;
+        _folderWatcher = folderWatcher;
         _logger = logger;
+        _uiContext = SynchronizationContext.Current;
+        _folderWatcher.ChangesDetected += OnExternalFolderChanged;
     }
 
     public NavigationHistory History { get; private set; } = NavigationHistory.Empty;
 
     public void Dispose()
     {
+        _folderWatcher.ChangesDetected -= OnExternalFolderChanged;
+        _folderWatcher.Dispose();
         _loadCts?.Cancel();
         _loadCts?.Dispose();
         _loadCts = null;
@@ -178,6 +203,19 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
         Items = sorted;
     }
 
+    partial void OnCurrentPathChanged(string? value)
+    {
+        if (value is not null)
+        {
+            _folderWatcher.Watch(value);
+        }
+    }
+
+    partial void OnSelectedItemsChanged(IReadOnlyList<FileItemViewModel> value)
+    {
+        NotifySelectionCommands();
+    }
+
     private bool CanGoBack() => History.CanGoBack;
 
     private bool CanGoForward() => History.CanGoForward;
@@ -189,6 +227,33 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
         GoBackCommand.NotifyCanExecuteChanged();
         GoForwardCommand.NotifyCanExecuteChanged();
         GoUpCommand.NotifyCanExecuteChanged();
+        CreateFolderCommand.NotifyCanExecuteChanged();
+        PasteCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnExternalFolderChanged(object? sender, EventArgs e)
+    {
+        // 우리 작업 직후의 에코 이벤트는 무시한다 (타겟 업데이트가 이미 반영함).
+        if (IsExternalRefreshSuppressed())
+        {
+            return;
+        }
+
+        if (_uiContext is null)
+        {
+            _ = ReloadAsync();
+            return;
+        }
+
+        _uiContext.Post(
+            _ =>
+            {
+                if (!IsExternalRefreshSuppressed())
+                {
+                    _ = ReloadAsync();
+                }
+            },
+            null);
     }
 
     // 모든 명령과 함께 UI 스레드에서만 호출되어야 한다(_loadCts 접근과 ObservableProperty 갱신이 이를 전제).
@@ -206,6 +271,7 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
         _loadCts = new CancellationTokenSource();
         var ct = _loadCts.Token;
 
+        var keepSelectedPath = SelectedItem?.Entry.FullPath;
         IsLoading = true;
         Status = FileListStatus.None;
         StatusMessage = null;
@@ -228,7 +294,9 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
             ct.ThrowIfCancellationRequested();
 
             Items = items;
-            SelectedItem = null;
+            SelectedItem = keepSelectedPath is null
+                ? null
+                : items.FirstOrDefault(i => string.Equals(i.Entry.FullPath, keepSelectedPath, StringComparison.OrdinalIgnoreCase));
             Status = items.Length == 0 ? FileListStatus.Empty : FileListStatus.None;
         }
         catch (OperationCanceledException)

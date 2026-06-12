@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <PackageReference Include="Vanara.PInvoke.Shell32" />
+    <PackageReference Include="Vanara.Windows.Shell.Common" />
   </ItemGroup>
 
   <ItemGroup>

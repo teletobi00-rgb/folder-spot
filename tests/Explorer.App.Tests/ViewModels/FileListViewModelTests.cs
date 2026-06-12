@@ -1,5 +1,6 @@
 using System.IO;
 using Explorer.App.ViewModels;
+using Explorer.Core.FileOperations;
 using Explorer.Core.FileSystem;
 using Explorer.Core.Settings;
 using Explorer.Core.Sorting;
@@ -17,6 +18,9 @@ public sealed class FileListViewModelTests
     private readonly IFileLauncher _launcher = Substitute.For<IFileLauncher>();
     private readonly ISettingsService _settings = Substitute.For<ISettingsService>();
     private readonly IShellIconProvider _icons = Substitute.For<IShellIconProvider>();
+    private readonly IFileOperationService _operations = Substitute.For<IFileOperationService>();
+    private readonly IFileClipboardService _clipboard = Substitute.For<IFileClipboardService>();
+    private readonly IFolderWatcher _watcher = Substitute.For<IFolderWatcher>();
 
     public FileListViewModelTests()
     {
@@ -24,7 +28,8 @@ public sealed class FileListViewModelTests
     }
 
     private FileListViewModel CreateViewModel() => new(
-        _enumerator, _launcher, _settings, _icons, NullLogger<FileListViewModel>.Instance);
+        _enumerator, _launcher, _settings, _icons, _operations, _clipboard, _watcher,
+        NullLogger<FileListViewModel>.Instance);
 
     private static FileEntry File(string name, bool hidden = false) => FileEntry.Create(
         @"C:\test\" + name, name, isDirectory: false, 10,

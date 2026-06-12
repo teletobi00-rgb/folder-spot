@@ -1,0 +1,47 @@
+<ui:FluentWindow x:Class="Explorer.App.Views.MainWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 xmlns:viewmodels="clr-namespace:Explorer.App.ViewModels"
+                 mc:Ignorable="d"
+                 d:DataContext="{d:DesignInstance Type=viewmodels:MainWindowViewModel}"
+                 Title="Explorer"
+                 Width="1200"
+                 Height="720"
+                 WindowStartupLocation="CenterScreen"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="Explorer" />
+
+        <StackPanel Grid.Row="1"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+            <TextBlock HorizontalAlignment="Center"
+                       FontSize="28"
+                       FontWeight="SemiBold"
+                       Text="Explorer" />
+            <TextBlock Margin="0,8,0,24"
+                       HorizontalAlignment="Center"
+                       Opacity="0.7"
+                       Text="Phase 0 — 스캐폴딩 완료. Phase 1에서 파일 목록이 표시됩니다." />
+            <ui:Button HorizontalAlignment="Center"
+                       Appearance="Primary"
+                       Command="{Binding ToggleThemeCommand}"
+                       Content="테마 전환" />
+            <TextBlock Margin="0,12,0,0"
+                       HorizontalAlignment="Center"
+                       Opacity="0.7">
+                <Run Text="현재 테마: " /><Run Text="{Binding CurrentTheme, Mode=OneWay}" />
+            </TextBlock>
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

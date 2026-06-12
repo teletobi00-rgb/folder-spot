@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Phase 7에서 MFT/USN P/Invoke가 필요하므로 처음부터 windows TFM 고정 -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Explorer.Core\Explorer.Core.csproj" />
+  </ItemGroup>
+
+</Project>

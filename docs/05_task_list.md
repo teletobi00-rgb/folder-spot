@@ -216,6 +216,12 @@ View — 수동
 ---
 
 ## Phase 8: 글로벌 검색 팝업 + 트레이
+> ✅ 2026-06-12 완료 (Phase 7보다 먼저 — 인덱스가 이미 가동 중이라 가치 우선). 테스트 369개.
+> 구현: RegisterHotKey+메시지 윈도우(Alt+Space, keymap.json Global.Search로 재바인딩), Acrylic 중앙 팝업
+> (as-you-type 120ms 디바운스, ↑↓/Enter=열기/Ctrl+Enter=폴더에서 보기/Esc, 포커스 아웃 숨김),
+> MRU 가중 랭킹(search-usage.json), 트레이 상주(닫기=숨김, 좌클릭/더블클릭 복귀, 자동 시작 체크, 종료),
+> E2E: 합성 keybd_event Alt+Space → 팝업 표시 로그 검증, 2,034,639항목 스냅샷 콜드 스타트 실증.
+> 이월: double-Ctrl 프리셋(LL 훅 필요), 트레이 커스텀 아이콘.
 
 - [ ] 8.1 `IGlobalHotkeyService` — 기본 **Alt+Space**, 실패 감지·안내, double-Ctrl 프리셋, 재바인딩 — **TDD** (R-IMEHOTKEY)
 - [ ] 8.2 트레이(H.NotifyIcon: 검색/설정/종료) + 자동 시작 — 등록 로직 TDD

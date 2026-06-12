@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using Explorer.App.Input;
+using Explorer.App.Services;
 using Explorer.App.ViewModels;
 using Explorer.Core.Input;
 using Explorer.Core.Workspace;
@@ -33,11 +34,14 @@ public partial class MainWindow : FluentWindow
     };
 
     private readonly MainWindowViewModel _viewModel;
+    private readonly AppLifecycle _lifecycle;
 
-    public MainWindow(MainWindowViewModel viewModel)
+    public MainWindow(MainWindowViewModel viewModel, AppLifecycle lifecycle)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
+        ArgumentNullException.ThrowIfNull(lifecycle);
         _viewModel = viewModel;
+        _lifecycle = lifecycle;
         DataContext = viewModel;
         InitializeComponent();
         ApplyKeyBindings();
@@ -47,9 +51,18 @@ public partial class MainWindow : FluentWindow
             await _viewModel.InitializeAsync();
             UpdatePaneLayout();
         };
-        Closing += (_, _) =>
+        Closing += (_, e) =>
         {
             _viewModel.SaveSession();
+
+            // 트레이 상주: 닫기 = 숨김 (핫키/인덱싱 유지). 진짜 종료는 트레이 메뉴에서.
+            if (!_lifecycle.ExitRequested)
+            {
+                e.Cancel = true;
+                Hide();
+                return;
+            }
+
             _viewModel.Workspace.Dispose();
         };
 
@@ -63,6 +76,18 @@ public partial class MainWindow : FluentWindow
 
         LeftPaneView.CrossPaneTabDropRequested += OnCrossPaneTabDrop;
         RightPaneView.CrossPaneTabDropRequested += OnCrossPaneTabDrop;
+    }
+
+    /// <summary>트레이/검색 팝업에서 메인 창을 다시 띄울 때.</summary>
+    public void ShowFromTray()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = WindowState.Normal;
+        }
+
+        Activate();
     }
 
     /// <summary>중앙 키맵(keymap.json 오버라이드 포함)으로 윈도우 키 바인딩을 구성한다.</summary>

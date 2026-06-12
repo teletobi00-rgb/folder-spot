@@ -12,6 +12,7 @@
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
             <converters:ActiveSideToBrushConverter x:Key="ActiveSideToBrushConverter" />
+            <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

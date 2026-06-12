@@ -14,6 +14,9 @@ public sealed record SearchHit
     public long Size { get; init; }
 
     public DateTime Modified { get; init; }
+
+    /// <summary>일치 등급: 0=정확, 1=접두, 2=부분 — 소비자가 추가 가중(MRU 등)에 쓴다.</summary>
+    public int Rank { get; init; }
 }
 
 /// <summary>인덱스에 넣을 항목 하나 (스캔/FSW 소스가 생산).</summary>
@@ -129,7 +132,7 @@ public sealed class FileIndex : IFileIndex, IDisposable
                 .ThenBy(m => _nodes[m.Id].Name.Length)
                 .ThenBy(m => _nodes[m.Id].Name, StringComparer.OrdinalIgnoreCase)
                 .Take(maxResults)
-                .Select(m => CreateHit(m.Id))];
+                .Select(m => CreateHit(m.Id, m.Rank))];
         }
         finally
         {
@@ -432,7 +435,7 @@ public sealed class FileIndex : IFileIndex, IDisposable
         _liveCount--;
     }
 
-    private SearchHit CreateHit(int nodeId)
+    private SearchHit CreateHit(int nodeId, int rank)
     {
         var node = _nodes[nodeId];
         return new SearchHit
@@ -442,6 +445,7 @@ public sealed class FileIndex : IFileIndex, IDisposable
             IsDirectory = node.IsDirectory,
             Size = node.Size,
             Modified = node.ModifiedTicks > 0 ? new DateTime(node.ModifiedTicks, DateTimeKind.Local) : default,
+            Rank = rank,
         };
     }
 

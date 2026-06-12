@@ -103,6 +103,18 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
 
     public NavigationHistory History { get; private set; } = NavigationHistory.Empty;
 
+    /// <summary>외부(검색 reveal 등)에서 경로로 항목을 선택한다. 목록에 없으면 무시.</summary>
+    public void SelectByPath(string fullPath)
+    {
+        var item = Items.FirstOrDefault(i =>
+            string.Equals(i.Entry.FullPath, fullPath, StringComparison.OrdinalIgnoreCase));
+        if (item is not null)
+        {
+            SelectedItem = item;
+            SelectedItems = [item];
+        }
+    }
+
     public void Dispose()
     {
         _folderWatcher.ChangesDetected -= OnExternalFolderChanged;

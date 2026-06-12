@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Interop;
+using Explorer.App.Input;
 using Explorer.App.Services;
 using Explorer.App.Services.Operations;
 using Explorer.App.ViewModels;
@@ -12,6 +13,7 @@ using Explorer.Core.Favorites;
 using Explorer.Core.FileSystem;
 using Explorer.Core.Input;
 using Explorer.Core.Operations;
+using Explorer.Core.Search;
 using Explorer.Core.Settings;
 using Explorer.Core.Undo;
 using Explorer.Indexing;
@@ -121,6 +123,17 @@ public partial class App : Application
         services.AddSingleton<OperationQueueViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
+
+        // 전역 검색: Alt+Space 핫키 → 팝업 → 인덱스 질의 (+MRU 가중)
+        services.AddSingleton<ISearchUsageStore>(provider => new JsonSearchUsageStore(
+            AppPaths.SearchUsageFile,
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<JsonSearchUsageStore>>()));
+        services.AddSingleton<IGlobalHotkeyService, GlobalHotkeyService>();
+        services.AddSingleton<AppLifecycle>();
+        services.AddSingleton<IAutoStartService, RegistryAutoStartService>();
+        services.AddSingleton<TrayService>();
+        services.AddSingleton<SearchPopupViewModel>();
+        services.AddSingleton<SearchPopupWindow>();
     }
 
     protected override void OnStartup(StartupEventArgs e)
@@ -147,7 +160,56 @@ public partial class App : Application
             _host.Services.GetRequiredService<IShellContextMenuService>().BeginWarmUp();
         }
 
+        SetUpGlobalSearch(window);
         Log.Information("Explorer 시작 완료");
+    }
+
+    /// <summary>전역 검색 핫키 + 팝업 + 트레이 배선.</summary>
+    private void SetUpGlobalSearch(MainWindow window)
+    {
+        _host.Services.GetRequiredService<ISearchUsageStore>().Load();
+
+        var mainViewModel = _host.Services.GetRequiredService<MainWindowViewModel>();
+        var popup = _host.Services.GetRequiredService<SearchPopupWindow>();
+        var popupViewModel = _host.Services.GetRequiredService<SearchPopupViewModel>();
+
+        popupViewModel.OpenFolderRequested += (_, path) =>
+        {
+            window.ShowFromTray();
+            _ = mainViewModel.Workspace.ActiveFileList.NavigateToAsync(path);
+        };
+        popupViewModel.RevealRequested += async (_, target) =>
+        {
+            try
+            {
+                window.ShowFromTray();
+                await mainViewModel.Workspace.ActiveFileList.NavigateToAsync(target.Directory);
+                mainViewModel.Workspace.ActiveFileList.SelectByPath(target.FullPath);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "검색 결과 표시 실패: {Path}", target.FullPath);
+            }
+        };
+
+        var keyMap = _host.Services.GetRequiredService<KeyMap>();
+        var gesture = keyMap.GestureFor(KeyActions.GlobalSearch);
+        if (string.IsNullOrWhiteSpace(gesture))
+        {
+            Log.Information("전역 검색 핫키가 비어 있어 등록하지 않습니다 (사용자 해제)");
+        }
+        else if (!_host.Services.GetRequiredService<IGlobalHotkeyService>().TryRegister(gesture, popup.Toggle))
+        {
+            Log.Warning("전역 검색 핫키({Gesture}) 등록 실패 — keymap.json에서 Global.Search를 변경할 수 있습니다", gesture);
+            mainViewModel.Workspace.ActiveFileList.StatusMessage =
+                $"전역 검색 핫키({gesture}) 등록 실패 — 다른 앱이 사용 중일 수 있습니다.";
+        }
+
+        _host.Services.GetRequiredService<TrayService>().Initialize(
+            window.ShowFromTray,
+            popup.Toggle,
+            _host.Services.GetRequiredService<IAutoStartService>(),
+            _host.Services.GetRequiredService<AppLifecycle>());
     }
 
     protected override void OnExit(ExitEventArgs e)

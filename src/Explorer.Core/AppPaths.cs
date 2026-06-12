@@ -15,5 +15,7 @@ public static class AppPaths
 
     public static string IndexDbFile { get; } = Path.Combine(AppDataDir, "index.db");
 
+    public static string SearchUsageFile { get; } = Path.Combine(AppDataDir, "search-usage.json");
+
     public static string LogsDir { get; } = Path.Combine(AppDataDir, "logs");
 }

@@ -81,7 +81,10 @@ public partial class App : Application
         services.AddTransient<IFolderWatcher>(provider => new FileSystemFolderWatcher(
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FileSystemFolderWatcher>>()));
 
-        services.AddSingleton<FileListViewModel>();
+        // 페인마다 독립 파일 목록을 가지므로 transient — WorkspaceViewModel이 팩토리로 생성/소유한다.
+        services.AddTransient<FileListViewModel>();
+        services.AddSingleton<WorkspaceViewModel>(provider =>
+            new WorkspaceViewModel(provider.GetRequiredService<FileListViewModel>));
         services.AddSingleton<DriveSidebarViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
@@ -104,6 +107,9 @@ public partial class App : Application
         Log.Information("MainWindow 인스턴스 생성 완료");
         MainWindow = window;
         window.Show();
+
+        // 셸 확장 DLL 선로딩 — 첫 우클릭 메뉴 지연을 줄인다.
+        _host.Services.GetRequiredService<IShellContextMenuService>().BeginWarmUp();
         Log.Information("Explorer 시작 완료");
     }
 

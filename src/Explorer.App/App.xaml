@@ -11,6 +11,7 @@
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
+            <converters:ActiveSideToBrushConverter x:Key="ActiveSideToBrushConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

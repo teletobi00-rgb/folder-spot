@@ -9,17 +9,23 @@
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewmodels:MainWindowViewModel}"
                  Title="Explorer"
-                 Width="1200"
-                 Height="720"
+                 Width="1280"
+                 Height="760"
                  WindowStartupLocation="CenterScreen"
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="Mica"
                  WindowCornerPreference="Round">
     <ui:FluentWindow.InputBindings>
-        <KeyBinding Modifiers="Alt" Key="Left" Command="{Binding FileList.GoBackCommand}" />
-        <KeyBinding Modifiers="Alt" Key="Right" Command="{Binding FileList.GoForwardCommand}" />
-        <KeyBinding Modifiers="Alt" Key="Up" Command="{Binding FileList.GoUpCommand}" />
-        <KeyBinding Modifiers="Ctrl" Key="R" Command="{Binding FileList.RefreshCommand}" />
+        <KeyBinding Modifiers="Alt" Key="Left" Command="{Binding Workspace.ActiveFileList.GoBackCommand}" />
+        <KeyBinding Modifiers="Alt" Key="Right" Command="{Binding Workspace.ActiveFileList.GoForwardCommand}" />
+        <KeyBinding Modifiers="Alt" Key="Up" Command="{Binding Workspace.ActiveFileList.GoUpCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="R" Command="{Binding Workspace.ActiveFileList.RefreshCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="T" Command="{Binding Workspace.ActivePane.AddTabCommand}" />
+        <KeyBinding Modifiers="Ctrl" Key="W"
+                    Command="{Binding Workspace.ActivePane.CloseTabCommand}"
+                    CommandParameter="{Binding Workspace.ActivePane.ActiveTab}" />
+        <KeyBinding Modifiers="Ctrl" Key="Tab" Command="{Binding Workspace.ActivePane.NextTabCommand}" />
+        <KeyBinding Modifiers="Ctrl+Shift" Key="D" Command="{Binding Workspace.ToggleDualModeCommand}" />
     </ui:FluentWindow.InputBindings>
     <Grid>
         <Grid.RowDefinitions>
@@ -31,7 +37,7 @@
 
         <ui:TitleBar Grid.Row="0" Title="Explorer" />
 
-        <!-- 툴바: 네비게이션 + 주소창 + 테마 -->
+        <!-- 툴바: 네비게이션 + 주소창 + 분할/테마 -->
         <Grid Grid.Row="1" Margin="8,4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
@@ -41,19 +47,19 @@
 
             <StackPanel Grid.Column="0" Orientation="Horizontal">
                 <ui:Button Margin="0,0,4,0"
-                           Command="{Binding FileList.GoBackCommand}"
+                           Command="{Binding Workspace.ActiveFileList.GoBackCommand}"
                            Content="←"
                            ToolTip="뒤로 (Alt+←)" />
                 <ui:Button Margin="0,0,4,0"
-                           Command="{Binding FileList.GoForwardCommand}"
+                           Command="{Binding Workspace.ActiveFileList.GoForwardCommand}"
                            Content="→"
                            ToolTip="앞으로 (Alt+→)" />
                 <ui:Button Margin="0,0,4,0"
-                           Command="{Binding FileList.GoUpCommand}"
+                           Command="{Binding Workspace.ActiveFileList.GoUpCommand}"
                            Content="↑"
                            ToolTip="위로 (Alt+↑)" />
                 <ui:Button Margin="0,0,8,0"
-                           Command="{Binding FileList.RefreshCommand}"
+                           Command="{Binding Workspace.ActiveFileList.RefreshCommand}"
                            Content="⟳"
                            ToolTip="새로 고침 (Ctrl+R)" />
             </StackPanel>
@@ -67,17 +73,22 @@
                 </TextBox.InputBindings>
             </TextBox>
 
-            <ui:Button Grid.Column="2"
-                       Margin="8,0,0,0"
-                       Command="{Binding ToggleThemeCommand}"
-                       Content="테마"
-                       ToolTip="{Binding CurrentTheme}" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                <ui:Button Margin="8,0,0,0"
+                           Command="{Binding Workspace.ToggleDualModeCommand}"
+                           Content="◫"
+                           ToolTip="2분할 토글 (Ctrl+Shift+D)" />
+                <ui:Button Margin="4,0,0,0"
+                           Command="{Binding ToggleThemeCommand}"
+                           Content="테마"
+                           ToolTip="{Binding CurrentTheme}" />
+            </StackPanel>
         </Grid>
 
-        <!-- 본문: 드라이브 사이드바 | 파일 목록 -->
+        <!-- 본문: 드라이브 사이드바 | 좌 페인 | (스플리터) | 우 페인 -->
         <Grid Grid.Row="2" Margin="8,0,8,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="220" MinWidth="140" />
+                <ColumnDefinition Width="200" MinWidth="120" />
                 <ColumnDefinition Width="4" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
@@ -102,7 +113,33 @@
                           HorizontalAlignment="Stretch"
                           Background="Transparent" />
 
-            <views:FileListView Grid.Column="2" DataContext="{Binding FileList}" />
+            <Grid x:Name="PanesGrid" Grid.Column="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="LeftPaneColumn" Width="*" />
+                    <ColumnDefinition x:Name="PaneSplitterColumn" Width="0" />
+                    <ColumnDefinition x:Name="RightPaneColumn" Width="0" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        BorderBrush="{Binding Workspace.ActiveSide, Converter={StaticResource ActiveSideToBrushConverter}, ConverterParameter=Left}"
+                        BorderThickness="0,2,0,0">
+                    <views:PaneView x:Name="LeftPaneView" DataContext="{Binding Workspace.LeftPane}" />
+                </Border>
+
+                <GridSplitter x:Name="PaneSplitter"
+                              Grid.Column="1"
+                              HorizontalAlignment="Stretch"
+                              Background="Transparent"
+                              Visibility="Collapsed" />
+
+                <Border Grid.Column="2"
+                        BorderBrush="{Binding Workspace.ActiveSide, Converter={StaticResource ActiveSideToBrushConverter}, ConverterParameter=Right}"
+                        BorderThickness="0,2,0,0">
+                    <views:PaneView x:Name="RightPaneView"
+                                    DataContext="{Binding Workspace.RightPane}"
+                                    Visibility="Collapsed" />
+                </Border>
+            </Grid>
         </Grid>
 
         <!-- 상태바 -->
@@ -112,13 +149,13 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" FontSize="12" Opacity="0.7">
-                <Run Text="{Binding FileList.Items.Count, Mode=OneWay}" /><Run Text="개 항목" />
+                <Run Text="{Binding Workspace.ActiveFileList.Items.Count, Mode=OneWay}" /><Run Text="개 항목" />
             </TextBlock>
             <TextBlock Grid.Column="1"
                        Margin="16,0,0,0"
                        FontSize="12"
                        Opacity="0.7"
-                       Text="{Binding FileList.StatusMessage}"
+                       Text="{Binding Workspace.ActiveFileList.StatusMessage}"
                        TextTrimming="CharacterEllipsis" />
         </Grid>
     </Grid>

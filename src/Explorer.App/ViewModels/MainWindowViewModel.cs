@@ -10,6 +10,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 {
     private readonly ISettingsService _settings;
     private readonly IThemeService _themeService;
+    private FileListViewModel _wiredFileList;
 
     [ObservableProperty]
     private AppTheme _currentTheme;
@@ -17,37 +18,47 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public MainWindowViewModel(
         ISettingsService settings,
         IThemeService themeService,
-        FileListViewModel fileList,
+        WorkspaceViewModel workspace,
         DriveSidebarViewModel driveSidebar)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(themeService);
-        ArgumentNullException.ThrowIfNull(fileList);
+        ArgumentNullException.ThrowIfNull(workspace);
         ArgumentNullException.ThrowIfNull(driveSidebar);
         _settings = settings;
         _themeService = themeService;
-        FileList = fileList;
+        Workspace = workspace;
         DriveSidebar = driveSidebar;
         AddressBar = new AddressBarViewModel();
         _currentTheme = settings.Current.Theme;
 
-        DriveSidebar.DriveOpenRequested += (_, path) => _ = FileList.NavigateToAsync(path);
-        AddressBar.NavigationRequested += (_, path) => _ = FileList.NavigateToAsync(path);
-        FileList.PropertyChanged += OnFileListPropertyChanged;
+        DriveSidebar.DriveOpenRequested += (_, path) => _ = Workspace.ActiveFileList.NavigateToAsync(path);
+        AddressBar.NavigationRequested += (_, path) => _ = Workspace.ActiveFileList.NavigateToAsync(path);
+
+        // 주소창은 항상 "활성 페인"의 경로를 따라간다 — 활성 페인이 바뀌면 구독을 옮긴다.
+        _wiredFileList = Workspace.ActiveFileList;
+        _wiredFileList.PropertyChanged += OnActiveFileListPropertyChanged;
+        Workspace.PropertyChanged += OnWorkspacePropertyChanged;
     }
 
-    public FileListViewModel FileList { get; }
+    public WorkspaceViewModel Workspace { get; }
 
     public DriveSidebarViewModel DriveSidebar { get; }
 
     public AddressBarViewModel AddressBar { get; }
 
-    /// <summary>창 표시 후 호출: 드라이브 목록 채우고 시작 폴더로 이동한다.</summary>
+    /// <summary>창 표시 후 호출: 드라이브 목록 채우고 세션 복원(없으면 기본 폴더).</summary>
     public async Task InitializeAsync()
     {
         DriveSidebar.RefreshCommand.Execute(null);
-        await FileList.NavigateToAsync(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile))
-            .ConfigureAwait(false);
+        await Workspace.RestoreSessionAsync(_settings.Current.Session);
+    }
+
+    /// <summary>종료 시 세션 저장.</summary>
+    public void SaveSession()
+    {
+        var session = Workspace.CaptureSession();
+        _settings.Update(s => s with { Session = session });
     }
 
     [RelayCommand]
@@ -65,11 +76,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
         CurrentTheme = updated.Theme;
     }
 
-    private void OnFileListPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnWorkspacePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(WorkspaceViewModel.ActiveFileList))
+        {
+            return;
+        }
+
+        _wiredFileList.PropertyChanged -= OnActiveFileListPropertyChanged;
+        _wiredFileList = Workspace.ActiveFileList;
+        _wiredFileList.PropertyChanged += OnActiveFileListPropertyChanged;
+        AddressBar.SetCurrentPath(_wiredFileList.CurrentPath);
+    }
+
+    private void OnActiveFileListPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(FileListViewModel.CurrentPath))
         {
-            AddressBar.SetCurrentPath(FileList.CurrentPath);
+            AddressBar.SetCurrentPath(Workspace.ActiveFileList.CurrentPath);
         }
     }
 }

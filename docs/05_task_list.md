@@ -105,6 +105,12 @@ D&D
 ## Phase 3: 듀얼 페인 + 페인별 탭
 
 **목표:** 2분할(토글·스플리터) + **페인이 탭 소유**(TC 모델) + breadcrumb + 세션 복원.
+> ✅ 2026-06-12 완료 (breadcrumb 제외 — 후속으로 이월). 테스트 240개.
+> 구현: 불변 PaneState/TabState(Core, TDD) + 페인당 FileListViewModel 1개 재사용(탭 전환 시 경로/정렬 swap, R-TABMEM),
+> 탭 드래그 재정렬 + **크로스 페인 탭 드래그 이동**, Ctrl+T/W/Tab, Ctrl+Shift+D 분할 토글,
+> 활성 페인 테두리 강조 + 포커스 추적, 세션 저장/복원(settings.json, 비활성 페인 지연 로드).
+> 이월 항목: breadcrumb(주소창은 텍스트 입력 유지), 페인 스플리터 비율 영속, 탭 고정(pin).
+> 부수 개선: 우클릭 메뉴 지연 해소 — 셸 확장 열거(이 머신 3.7s)를 시작 시 백그라운드 STA(메시지 펌프 포함)로 워밍업.
 
 상태 모델 — **전부 TDD (불변 조작 전수)**
 - [ ] 3.1 `TabState` · 3.2 `PaneState`(탭 add/close/move/reorder 순수 함수) · 3.3 `WorkspaceState`

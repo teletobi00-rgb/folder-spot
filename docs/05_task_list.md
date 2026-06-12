@@ -179,6 +179,12 @@ View — 수동
 ## Phase 6: 인덱싱 인프라 (백엔드만)
 
 **목표:** 인메모리 인덱스 + SQLite 스냅샷 + 비권한 소스(재귀+FSW). UI 없음.
+> ✅ 2026-06-12 완료. 테스트 355개. 성능: 20만 노드 구축 223ms / 메모리 34MB(노드당 183B — children 맵 포함) /
+> 검색 13~29ms (as-you-type 50ms 목표 충족). E2E: 스캔→스냅샷→FSW 감시→재시작 시 스냅샷 즉시 복원 검증.
+> 구현: Everything식 부모참조 인덱스(디렉터리 이름변경 O(1)), FileIndexCatalog 원자 교체(재스캔 무중단),
+> SQLite WAL 스냅샷, FSW 오버플로→재스캔 복구, 진단 env(EXPLORER_DISABLE_INDEXING / EXPLORER_INDEX_ROOTS).
+> 리뷰가 잡은 CRITICAL: 스냅샷 id 재배번 트리 손상(중간 삭제 후 저장→복원) — 원본 id 슬롯 복원으로 수정 + 회귀 테스트.
+> 한계(문서화): 시작 시 전체 재스캔(USN 없음 — Phase 7가 해소), 넓은 질의 후보 상한(maxResults×100), NFD 파일명 매칭.
 
 - [ ] 6.1 `IndexEntry` 컴팩트(부모 참조+이름, ~140B/파일) — **TDD**
 - [ ] 6.2 `IFileIndex` (add/update/remove/query, 스레드 안전) — **TDD**

@@ -13,5 +13,7 @@ public static class AppPaths
 
     public static string KeymapFile { get; } = Path.Combine(AppDataDir, "keymap.json");
 
+    public static string IndexDbFile { get; } = Path.Combine(AppDataDir, "index.db");
+
     public static string LogsDir { get; } = Path.Combine(AppDataDir, "logs");
 }

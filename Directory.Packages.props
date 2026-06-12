@@ -23,6 +23,7 @@
 
   <ItemGroup Label="Indexing">
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.9" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.9" />
   </ItemGroup>
 
   <ItemGroup Label="Preview">

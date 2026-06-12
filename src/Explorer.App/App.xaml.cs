@@ -14,6 +14,9 @@ using Explorer.Core.Input;
 using Explorer.Core.Operations;
 using Explorer.Core.Settings;
 using Explorer.Core.Undo;
+using Explorer.Indexing;
+using Explorer.Indexing.Persistence;
+using Explorer.Indexing.Sources;
 using Explorer.Shell.Clipboard;
 using Explorer.Shell.ContextMenu;
 using Explorer.Shell.Drives;
@@ -86,6 +89,16 @@ public partial class App : Application
             AppPaths.FavoritesFile,
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<JsonFavoritesService>>()));
         services.AddSingleton(KeyMap.LoadWithOverrides(AppPaths.KeymapFile));
+
+        // 파일 인덱싱 파이프라인: 스냅샷 즉시 복원 → 백그라운드 재스캔 → FSW 증분 (Phase 7에서 USN으로 교체)
+        services.AddSingleton<FileIndexCatalog>();
+        services.AddSingleton(provider => new SqliteIndexSnapshot(
+            AppPaths.IndexDbFile,
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SqliteIndexSnapshot>>()));
+        services.AddSingleton<RecursiveScanSource>();
+        services.AddSingleton(IndexingOptions.FromEnvironment());
+        services.AddSingleton<IndexingService>();
+        services.AddHostedService(provider => provider.GetRequiredService<IndexingService>());
 
         // 작업 큐 파이프라인: 큐(직렬 워커) → 실행기(충돌 해소 + 셸 호출 + Undo 기록)
         services.AddSingleton<IUndoService, UndoService>();

@@ -2,9 +2,11 @@ using Explorer.App.Services;
 using Explorer.App.Tests.TestSupport;
 using Explorer.App.ViewModels;
 using Explorer.Core.FileSystem;
+using Explorer.Core.Input;
 using Explorer.Core.Settings;
 using Explorer.Core.Workspace;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
 namespace Explorer.App.Tests.ViewModels;
@@ -23,7 +25,10 @@ public sealed class MainWindowViewModelTests
 
         var workspace = new WorkspaceViewModel(_context.CreateFileList);
         var sidebar = new DriveSidebarViewModel(_driveProvider);
-        return new MainWindowViewModel(_context.Settings, _themeService, workspace, sidebar);
+        var favorites = new FavoritesViewModel(
+            _context.Favorites, Substitute.For<IFileLauncher>(), NullLogger<FavoritesViewModel>.Instance);
+        return new MainWindowViewModel(
+            _context.Settings, _themeService, workspace, sidebar, favorites, KeyMap.CreateDefault());
     }
 
     [Fact]

@@ -30,7 +30,8 @@ public sealed class FileListViewModelOperationTests
 
     private FileListViewModel CreateViewModel() => new(
         _enumerator, Substitute.For<IFileLauncher>(), _settings, Substitute.For<IShellIconProvider>(),
-        _operations, _clipboard, _watcher, NullLogger<FileListViewModel>.Instance);
+        _operations, _clipboard, _watcher, Substitute.For<Explorer.Core.Favorites.IFavoritesService>(),
+        NullLogger<FileListViewModel>.Instance);
 
     private static FileEntry File(string name) => FileEntry.Create(
         @"C:\test\" + name, name, isDirectory: false, 10,

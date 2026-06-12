@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using Explorer.Core.FileOperations;
 using Explorer.Core.FileSystem;
 using Explorer.Core.Sorting;
+using Microsoft.Extensions.Logging;
 
 namespace Explorer.App.ViewModels;
 
@@ -77,6 +78,26 @@ public sealed partial class FileListViewModel
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
     private Task DeleteSelectionPermanentAsync() => DeleteCoreAsync(permanent: true);
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private void AddSelectionToFavorites()
+    {
+        var added = 0;
+        foreach (var item in SelectedItems)
+        {
+            try
+            {
+                _favorites.Add(item.Entry.FullPath, item.IsDirectory);
+                added++;
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "즐겨찾기 추가 실패: {Path}", item.Entry.FullPath);
+            }
+        }
+
+        StatusMessage = $"{added}개 항목을 즐겨찾기에 추가했습니다.";
+    }
 
     [RelayCommand(CanExecute = nameof(HasSingleSelection))]
     private void BeginRename()
@@ -230,6 +251,7 @@ public sealed partial class FileListViewModel
         DeleteSelectionCommand.NotifyCanExecuteChanged();
         DeleteSelectionPermanentCommand.NotifyCanExecuteChanged();
         BeginRenameCommand.NotifyCanExecuteChanged();
+        AddSelectionToFavoritesCommand.NotifyCanExecuteChanged();
         PasteCommand.NotifyCanExecuteChanged();
     }
 

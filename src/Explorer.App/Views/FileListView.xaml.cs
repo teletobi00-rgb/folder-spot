@@ -279,6 +279,19 @@ public partial class FileListView : UserControl
         }
     }
 
+    /// <summary>키보드 페인 전환 시 호출 — 선택된 행(없으면 목록)에 포커스를 준다.</summary>
+    public void FocusList()
+    {
+        if (FileList.SelectedItem is { } selected
+            && FileList.ItemContainerGenerator.ContainerFromItem(selected) is ListViewItem container)
+        {
+            container.Focus();
+            return;
+        }
+
+        FileList.Focus();
+    }
+
     private void OnContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
         if (_suppressBackgroundMenuOnce)

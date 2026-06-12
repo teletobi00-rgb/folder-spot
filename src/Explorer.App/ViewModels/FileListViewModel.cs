@@ -2,6 +2,7 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Explorer.Core.FileOperations;
+using Explorer.Core.Favorites;
 using Explorer.Core.FileSystem;
 using Explorer.Core.Navigation;
 using Explorer.Core.Settings;
@@ -33,6 +34,7 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
     private readonly IFileOperationService _operations;
     private readonly IFileClipboardService _clipboard;
     private readonly IFolderWatcher _folderWatcher;
+    private readonly IFavoritesService _favorites;
     private readonly ILogger<FileListViewModel> _logger;
     private readonly SynchronizationContext? _uiContext;
     private CancellationTokenSource? _loadCts;
@@ -69,6 +71,7 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
         IFileOperationService operations,
         IFileClipboardService clipboard,
         IFolderWatcher folderWatcher,
+        IFavoritesService favorites,
         ILogger<FileListViewModel> logger)
     {
         ArgumentNullException.ThrowIfNull(enumerator);
@@ -78,6 +81,7 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
         ArgumentNullException.ThrowIfNull(operations);
         ArgumentNullException.ThrowIfNull(clipboard);
         ArgumentNullException.ThrowIfNull(folderWatcher);
+        ArgumentNullException.ThrowIfNull(favorites);
         ArgumentNullException.ThrowIfNull(logger);
         _enumerator = enumerator;
         _launcher = launcher;
@@ -86,6 +90,7 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
         _operations = operations;
         _clipboard = clipboard;
         _folderWatcher = folderWatcher;
+        _favorites = favorites;
         _logger = logger;
         _uiContext = SynchronizationContext.Current;
         _folderWatcher.ChangesDetected += OnExternalFolderChanged;

@@ -67,6 +67,8 @@
                        ToolTip="새 탭 (Ctrl+T)" />
         </Grid>
 
-        <views:FileListView Grid.Row="1" DataContext="{Binding FileList}" />
+        <views:FileListView x:Name="FileArea"
+                            Grid.Row="1"
+                            DataContext="{Binding FileList}" />
     </Grid>
 </UserControl>

@@ -22,6 +22,7 @@
             <Separator />
             <MenuItem Command="{Binding DeleteSelectionCommand}" Header="삭제" InputGestureText="Del" />
             <MenuItem Command="{Binding BeginRenameCommand}" Header="이름 바꾸기" InputGestureText="F2" />
+            <MenuItem Command="{Binding AddSelectionToFavoritesCommand}" Header="즐겨찾기에 추가" />
             <Separator />
             <MenuItem Click="OnShowNativeMenuClick" Header="Windows 메뉴 표시 (불안정 ⚠)" />
             <MenuItem Click="OnShowPropertiesClick" Header="속성" />

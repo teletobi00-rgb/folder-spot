@@ -30,6 +30,9 @@ public partial class PaneView : UserControl
     /// <summary>다른 페인에서 끌어온 탭이 드롭됨 — MainWindow가 워크스페이스로 라우팅한다.</summary>
     public event EventHandler<CrossPaneTabDropEventArgs>? CrossPaneTabDropRequested;
 
+    /// <summary>키보드 페인 전환 시 파일 목록으로 포커스를 옮긴다.</summary>
+    public void FocusFileList() => FileArea.FocusList();
+
     private PaneViewModel? ViewModel => DataContext as PaneViewModel;
 
     private sealed record TabDragPayload(PaneViewModel SourcePane, TabViewModel Tab);

@@ -7,7 +7,9 @@ using Explorer.App.ViewModels;
 using Explorer.App.Views;
 using Explorer.Core;
 using Explorer.Core.FileOperations;
+using Explorer.Core.Favorites;
 using Explorer.Core.FileSystem;
+using Explorer.Core.Input;
 using Explorer.Core.Settings;
 using Explorer.Shell.Clipboard;
 using Explorer.Shell.ContextMenu;
@@ -77,6 +79,10 @@ public partial class App : Application
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ShellFileOperationService>>()));
         services.AddSingleton<IFileClipboardService, WpfFileClipboardService>();
         services.AddSingleton<IShellContextMenuService, ShellContextMenuService>();
+        services.AddSingleton<IFavoritesService>(provider => new JsonFavoritesService(
+            AppPaths.FavoritesFile,
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<JsonFavoritesService>>()));
+        services.AddSingleton(KeyMap.LoadWithOverrides(AppPaths.KeymapFile));
         // 와처는 소유 VM이 수명을 관리한다 — 페인마다 하나씩 갖도록 transient (Phase 3 듀얼 페인 대비).
         services.AddTransient<IFolderWatcher>(provider => new FileSystemFolderWatcher(
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FileSystemFolderWatcher>>()));
@@ -86,6 +92,7 @@ public partial class App : Application
         services.AddSingleton<WorkspaceViewModel>(provider =>
             new WorkspaceViewModel(provider.GetRequiredService<FileListViewModel>));
         services.AddSingleton<DriveSidebarViewModel>();
+        services.AddSingleton<FavoritesViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
     }

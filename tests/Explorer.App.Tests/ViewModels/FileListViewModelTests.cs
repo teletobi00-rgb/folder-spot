@@ -1,6 +1,7 @@
 using System.IO;
 using Explorer.App.ViewModels;
 using Explorer.Core.FileOperations;
+using Explorer.Core.Favorites;
 using Explorer.Core.FileSystem;
 using Explorer.Core.Settings;
 using Explorer.Core.Sorting;
@@ -21,6 +22,7 @@ public sealed class FileListViewModelTests
     private readonly IFileOperationService _operations = Substitute.For<IFileOperationService>();
     private readonly IFileClipboardService _clipboard = Substitute.For<IFileClipboardService>();
     private readonly IFolderWatcher _watcher = Substitute.For<IFolderWatcher>();
+    private readonly IFavoritesService _favorites = Substitute.For<IFavoritesService>();
 
     public FileListViewModelTests()
     {
@@ -28,7 +30,7 @@ public sealed class FileListViewModelTests
     }
 
     private FileListViewModel CreateViewModel() => new(
-        _enumerator, _launcher, _settings, _icons, _operations, _clipboard, _watcher,
+        _enumerator, _launcher, _settings, _icons, _operations, _clipboard, _watcher, _favorites,
         NullLogger<FileListViewModel>.Instance);
 
     private static FileEntry File(string name, bool hidden = false) => FileEntry.Create(

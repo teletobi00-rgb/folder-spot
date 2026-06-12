@@ -9,5 +9,9 @@ public static class AppPaths
 
     public static string SettingsFile { get; } = Path.Combine(AppDataDir, "settings.json");
 
+    public static string FavoritesFile { get; } = Path.Combine(AppDataDir, "favorites.json");
+
+    public static string KeymapFile { get; } = Path.Combine(AppDataDir, "keymap.json");
+
     public static string LogsDir { get; } = Path.Combine(AppDataDir, "logs");
 }

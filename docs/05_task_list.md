@@ -184,7 +184,7 @@ View — 수동
 > 구현: Everything식 부모참조 인덱스(디렉터리 이름변경 O(1)), FileIndexCatalog 원자 교체(재스캔 무중단),
 > SQLite WAL 스냅샷, FSW 오버플로→재스캔 복구, 진단 env(EXPLORER_DISABLE_INDEXING / EXPLORER_INDEX_ROOTS).
 > 리뷰가 잡은 CRITICAL: 스냅샷 id 재배번 트리 손상(중간 삭제 후 저장→복원) — 원본 id 슬롯 복원으로 수정 + 회귀 테스트.
-> 한계(문서화): 시작 시 전체 재스캔(USN 없음 — Phase 7가 해소), 넓은 질의 후보 상한(maxResults×100), NFD 파일명 매칭.
+> 한계(문서화): 시작 시 전체 재스캔(✅ Phase 7에서 opt-in USN 고속 경로로 해소), 넓은 질의 후보 상한(maxResults×100), NFD 파일명 매칭.
 
 - [ ] 6.1 `IndexEntry` 컴팩트(부모 참조+이름, ~140B/파일) — **TDD**
 - [ ] 6.2 `IFileIndex` (add/update/remove/query, 스레드 안전) — **TDD**
@@ -202,16 +202,19 @@ View — 수동
 
 ---
 
-## Phase 7: NTFS MFT/USN 고속 인덱싱 (권한 상승)
+## Phase 7: NTFS MFT/USN 고속 인덱싱 (권한 상승) → ⭐ v1.0 완성
+> ✅ 2026-06-13 완료 — **마지막 페이즈, v1.0 기능 완성.** 테스트 456개(Usn 34 순수로직 + 5 가짜헬퍼 통합).
+> 설계 핵심: **재귀+FSW 폴백이 1급(기본·UAC 없음)**, USN 고속 경로는 **opt-in**(트레이 토글, 다음 시작부터 적용, 볼륨당 UAC 1회).
 
-- [ ] 7.1 `Explorer.Helper.Elevated` exe + named pipe IPC 프로토콜 — **TDD(직렬화)**
-- [ ] 7.2 MFT 열거(`FSCTL_ENUM_USN_DATA`, FRN→경로) — FRN 매핑 **TDD**, 통합 수동
-- [ ] 7.3 USN tailing(레코드→델타, USN 위치 영속→재시작 replay) — 파싱 **TDD**
-- [ ] 7.4 UAC 동의 흐름 + 거부 시 폴백 graceful degrade + 헬퍼 크래시 복구
-- [ ] 7.5 소스 자동 선택(NTFS+권한→MFT/USN, 그 외→재귀+FSW) + 오버라이드 — **TDD**
-- [ ] 7.6 (백로그) Windows 서비스 모드 상시 tailing
+- [x] 7.1 `Explorer.Helper.Elevated` exe + named pipe IPC 프로토콜 — **TDD(직렬화)** · `UsnProtocol`(Batch/EnumDone/Change/Error 프레이밍), 매니페스트 requireAdministrator
+- [x] 7.2 MFT 열거(`FSCTL_ENUM_USN_DATA`, FRN→경로) — FRN 매핑 **TDD**(`MftPathResolver`), `VolumeUsnReader` P/Invoke
+- [x] 7.3 USN tailing(레코드→델타) — 파싱 **TDD**(`UsnChangeTracker`: 생성/삭제/이름변경/이동/수정), 헬퍼 폴링 tailing
+- [x] 7.4 UAC 동의 흐름(runas, 거부=ERROR_CANCELLED→폴백) + 헬퍼 오류/파이프 끊김 graceful degrade(`UsnIndexSource`)
+- [x] 7.5 소스 자동 선택(`IndexSourceSelector`: NTFS+Fixed+opt-in+헬퍼존재→USN, 그 외→재귀+FSW) — **TDD**
+- [ ] 7.6 (백로그) Windows 서비스 모드 상시 tailing — `08_backlog`로 이관
 
-**DoD:** 권한 시 NTFS 전체 수 초~분 인덱싱 · USN 준실시간 · 거부 시 기능 저하만(R-ELEVATION) · 헬퍼 크래시 무영향
+**DoD:** ✅ 폴백 기본 동작(라이브 확인) · ✅ opt-in USN 경로(헬퍼+프로토콜+디스패치 통합테스트) · 거부 시 기능 저하만(R-ELEVATION) · 헬퍼 크래시 무영향(파이프 끊김 정상종료)
+> 한계(문서화): 디렉터리 **교차 폴더 이동**은 USN 델타로 하위 항목을 잃을 수 있어 다음 전체 재스캔에서 복구(같은 부모 rename은 O(1) 유지). 헬퍼 happy-path는 샌드박스 UAC 제약으로 런타임 수동검증 대상.
 
 ---
 

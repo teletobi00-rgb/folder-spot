@@ -12,12 +12,16 @@ public sealed class TrayService : IDisposable
         Action showMainWindow,
         Action toggleSearch,
         IAutoStartService autoStart,
-        AppLifecycle lifecycle)
+        AppLifecycle lifecycle,
+        Func<bool> getFastIndexing,
+        Action<bool> setFastIndexing)
     {
         ArgumentNullException.ThrowIfNull(showMainWindow);
         ArgumentNullException.ThrowIfNull(toggleSearch);
         ArgumentNullException.ThrowIfNull(autoStart);
         ArgumentNullException.ThrowIfNull(lifecycle);
+        ArgumentNullException.ThrowIfNull(getFastIndexing);
+        ArgumentNullException.ThrowIfNull(setFastIndexing);
 
         var menu = new ContextMenu();
 
@@ -40,8 +44,30 @@ public sealed class TrayService : IDisposable
         autoStartItem.Click += (_, _) => autoStart.SetEnabled(autoStartItem.IsChecked);
         menu.Items.Add(autoStartItem);
 
+        var fastIndexItem = new MenuItem
+        {
+            Header = "빠른 인덱싱 (NTFS·관리자)",
+            IsCheckable = true,
+            IsChecked = getFastIndexing(),
+            ToolTip = "켜면 다음 시작부터 MFT/USN 고속 인덱싱을 사용합니다(관리자 권한 1회 동의 필요).",
+        };
+        fastIndexItem.Click += (_, _) =>
+        {
+            setFastIndexing(fastIndexItem.IsChecked);
+            _trayIcon?.ShowNotification(
+                "빠른 인덱싱",
+                fastIndexItem.IsChecked
+                    ? "다음 앱 시작부터 적용됩니다 (관리자 권한 동의 필요)."
+                    : "다음 앱 시작부터 일반 인덱싱으로 돌아갑니다.");
+        };
+        menu.Items.Add(fastIndexItem);
+
         // 외부에서 Run 키가 바뀌었을 수 있으니 메뉴를 열 때마다 실제 상태를 다시 읽는다.
-        menu.Opened += (_, _) => autoStartItem.IsChecked = autoStart.IsEnabled;
+        menu.Opened += (_, _) =>
+        {
+            autoStartItem.IsChecked = autoStart.IsEnabled;
+            fastIndexItem.IsChecked = getFastIndexing();
+        };
 
         menu.Items.Add(new Separator());
 

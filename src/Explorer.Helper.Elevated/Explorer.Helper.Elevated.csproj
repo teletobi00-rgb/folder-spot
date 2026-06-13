@@ -2,12 +2,15 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- Phase 7에서 MFT/USN P/Invoke가 필요하므로 처음부터 windows TFM 고정 -->
+    <!-- MFT/USN P/Invoke + Explorer.Indexing 참조. 관리자 권한 매니페스트로 빌드. -->
     <TargetFramework>net10.0-windows</TargetFramework>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyTitle>Explorer 인덱싱 권한 헬퍼</AssemblyTitle>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Explorer.Core\Explorer.Core.csproj" />
+    <ProjectReference Include="..\Explorer.Indexing\Explorer.Indexing.csproj" />
   </ItemGroup>
 
 </Project>

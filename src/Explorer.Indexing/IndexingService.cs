@@ -1,7 +1,8 @@
-using Explorer.Core.FileSystem;
+﻿using Explorer.Core.FileSystem;
 using Explorer.Indexing.Index;
 using Explorer.Indexing.Persistence;
 using Explorer.Indexing.Sources;
+using Explorer.Indexing.Usn;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -33,6 +34,12 @@ public sealed record IndexingOptions
 
     public bool Disabled { get; init; }
 
+    /// <summary>NTFS MFT/USN 고속 경로 사용(옵트인). 끄면 재귀+FSW 폴백.</summary>
+    public bool FastIndexingEnabled { get; init; }
+
+    /// <summary>권한 헬퍼 실행 파일 경로 (없으면 USN 비활성).</summary>
+    public string? HelperPath { get; init; }
+
     /// <summary>변경 후 스냅샷 저장까지의 지연.</summary>
     public TimeSpan SnapshotInterval { get; init; } = TimeSpan.FromMinutes(5);
 
@@ -59,6 +66,7 @@ public sealed class IndexingService : IHostedService, IDisposable
     private readonly ILogger<IndexingService> _logger;
     private readonly CancellationTokenSource _shutdown = new();
     private readonly List<FswIndexSource> _watchers = [];
+    private readonly List<UsnIndexSource> _usnSources = [];
     private readonly Lock _rescanGate = new();
     private readonly Lock _saveGate = new();
     private readonly HashSet<string> _pendingRescans = new(StringComparer.OrdinalIgnoreCase);
@@ -106,7 +114,7 @@ public sealed class IndexingService : IHostedService, IDisposable
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         await _shutdown.CancelAsync();
-        DisposeWatchers();
+        DisposeSources();
 
         // 종료 저장과 경합하지 않도록 주기 타이머를 먼저 멈춘다.
         _snapshotTimer?.Dispose();
@@ -129,7 +137,7 @@ public sealed class IndexingService : IHostedService, IDisposable
     public void Dispose()
     {
         _snapshotTimer?.Dispose();
-        DisposeWatchers();
+        DisposeSources();
         _shutdown.Dispose();
     }
 
@@ -151,11 +159,12 @@ public sealed class IndexingService : IHostedService, IDisposable
                 return;
             }
 
-            // 2) 전체 재스캔은 새 인덱스에 수행 후 원자 교체 (스냅샷이 stale해도 검색 무중단)
-            await RescanAllAsync(roots, ct).ConfigureAwait(false);
+            // 2) 전체 재구축은 새 인덱스에 수행 후 원자 교체 (스냅샷이 stale해도 검색 무중단).
+            //    USN 고속 경로 볼륨은 자체 tailing을 시작하고, 나머지는 FSW 감시가 필요하다.
+            var fallbackRoots = await RescanAllAsync(roots, ct).ConfigureAwait(false);
 
-            // 3) 증분 감시 시작 + 주기 스냅샷
-            foreach (var root in roots)
+            // 3) FSW 증분 감시는 폴백 볼륨에만 (USN 볼륨은 이미 tailing 중) + 주기 스냅샷
+            foreach (var root in fallbackRoots)
             {
                 StartWatcher(root);
             }
@@ -195,28 +204,137 @@ public sealed class IndexingService : IHostedService, IDisposable
             .Select(d => d.RootPath)];
     }
 
-    private async Task RescanAllAsync(IReadOnlyList<string> roots, CancellationToken ct)
+    /// <summary>전체 재구축. USN 고속 경로/재귀 폴백을 볼륨별로 선택하고, FSW가 필요한 폴백 볼륨 목록을 돌려준다.</summary>
+    private async Task<IReadOnlyList<string>> RescanAllAsync(IReadOnlyList<string> roots, CancellationToken ct)
     {
         var rebuilt = new FileIndex();
-        long total = 0;
+        var fallbackRoots = new List<string>();
+        var helperAvailable = _options.HelperPath is { } hp && UsnIndexSource.HelperExists(hp);
+
         foreach (var root in roots)
         {
-            Status = $"스캔 중: {root}";
-            _logger.LogInformation("인덱스 스캔 시작: {Root}", root);
-            try
+            var mode = IndexSourceSelector.Select(
+                DriveKindOf(root),
+                IndexSourceSelector.IsNtfsVolume(root),
+                _options.FastIndexingEnabled,
+                helperAvailable);
+
+            // onChange는 재구축 인덱스를 직접 겨냥한다 — 스왑 후 이 인덱스가 곧 current가 되므로
+            // tailing 델타가 일관되게 반영된다.
+            // 동시성: 앞 볼륨의 tailing(ApplyChange→AddOrUpdate)과 뒤 볼륨의 열거(AddBatch)가
+            // 같은 rebuilt를 동시에 쓸 수 있다. FileIndex의 모든 변경 경로가 쓰기 락을 잡으므로
+            // 직렬화되어 데이터 손상은 없다(검색의 읽기 락과도 안전).
+            if (mode == IndexSourceMode.UsnFast
+                && await TryUsnRescanAsync(root, rebuilt, ct).ConfigureAwait(false))
             {
-                total += await _scanner.ScanAsync(root, rebuilt.AddBatch, ct).ConfigureAwait(false);
+                continue;
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
-            {
-                _logger.LogWarning(ex, "루트 스캔 실패 — 건너뜀: {Root}", root);
-            }
+
+            await RecursiveRescanAsync(root, rebuilt, ct).ConfigureAwait(false);
+            fallbackRoots.Add(root);
         }
 
         _catalog.Swap(rebuilt).Dispose();
         _dirty = true;
-        _logger.LogInformation("인덱스 재구축 완료: {Total:N0}개 항목", total);
+        _logger.LogInformation("인덱스 재구축 완료: {Total:N0}개 항목 (USN {Usn}개 볼륨)",
+            rebuilt.Count, _usnSources.Count);
         SaveSnapshotIfDirty();
+        return fallbackRoots;
+    }
+
+    /// <summary>USN 고속 경로 시도. 열거 성공 시 true(소스는 tailing 유지), 실패 시 false(호출자 폴백).</summary>
+    private async Task<bool> TryUsnRescanAsync(string root, FileIndex rebuilt, CancellationToken ct)
+    {
+        Status = $"고속 인덱싱(USN): {root}";
+        _logger.LogInformation("USN 고속 인덱싱 시작: {Root}", root);
+        var source = new UsnIndexSource(_options.HelperPath!, LoggerShim.For<UsnIndexSource>(_logger));
+        try
+        {
+            var result = await source.StartAsync(
+                root,
+                rebuilt.AddBatch,
+                change => ApplyChange(rebuilt, change),
+                ct).ConfigureAwait(false);
+
+            if (result == UsnStartResult.Enumerated)
+            {
+                _usnSources.Add(source);
+                return true;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        {
+            _logger.LogWarning(ex, "USN 고속 인덱싱 실패 — 폴백: {Root}", root);
+        }
+
+        source.Dispose();
+        return false;
+    }
+
+    private async Task RecursiveRescanAsync(string root, FileIndex rebuilt, CancellationToken ct)
+    {
+        Status = $"스캔 중: {root}";
+        _logger.LogInformation("인덱스 스캔 시작(폴백): {Root}", root);
+        try
+        {
+            await _scanner.ScanAsync(root, rebuilt.AddBatch, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+        {
+            _logger.LogWarning(ex, "루트 스캔 실패 — 건너뜀: {Root}", root);
+        }
+    }
+
+    private DriveKind DriveKindOf(string root) =>
+        _drives.GetDrives().FirstOrDefault(d =>
+            string.Equals(d.RootPath, root, StringComparison.OrdinalIgnoreCase)) is { } drive
+            ? drive.Kind
+            : DriveKind.Fixed; // 진단용 명시 루트는 고정으로 간주
+
+    /// <summary>USN/FSW 변경 델타를 인덱스에 반영한다.</summary>
+    private static void ApplyChange(FileIndex index, in UsnChange change)
+    {
+        switch (change.Kind)
+        {
+            case FileChangeKind.Created or FileChangeKind.Modified:
+                AddPath(index, change.FullPath, change.IsDirectory);
+                break;
+            case FileChangeKind.Deleted:
+                index.RemoveSubtree(change.FullPath);
+                break;
+            case FileChangeKind.Renamed when change.OldFullPath is { } oldPath:
+                ApplyRename(index, oldPath, change.FullPath, change.IsDirectory);
+                break;
+        }
+    }
+
+    private static void ApplyRename(FileIndex index, string oldPath, string newPath, bool isDirectory)
+    {
+        var oldParent = Path.GetDirectoryName(oldPath);
+        var newParent = Path.GetDirectoryName(newPath);
+        var newName = Path.GetFileName(newPath);
+
+        // 같은 부모 내 이름변경이면 O(1) Rename으로 하위 경로까지 보존된다.
+        if (string.Equals(oldParent, newParent, StringComparison.OrdinalIgnoreCase) && newName.Length > 0)
+        {
+            index.Rename(oldPath, newName);
+            return;
+        }
+
+        // 다른 폴더로의 이동: 옛 위치를 제거하고 새 위치를 추가한다.
+        // (디렉터리 이동 시 하위 항목은 다음 전체 재구축까지 갱신되지 않는 알려진 한계.)
+        index.RemoveSubtree(oldPath);
+        AddPath(index, newPath, isDirectory);
+    }
+
+    private static void AddPath(FileIndex index, string fullPath, bool isDirectory)
+    {
+        var parent = Path.GetDirectoryName(fullPath);
+        var name = Path.GetFileName(fullPath);
+        if (!string.IsNullOrEmpty(parent) && name.Length > 0)
+        {
+            index.AddOrUpdate(new IndexItem(parent, name, isDirectory, 0, 0));
+        }
     }
 
     private void StartWatcher(string root)
@@ -259,9 +377,9 @@ public sealed class IndexingService : IHostedService, IDisposable
 
         _logger.LogInformation("이벤트 유실 복구 — 재스캔: {Roots}", string.Join(", ", pending));
         var roots = ResolveRoots();
-        DisposeWatchers();
-        await RescanAllAsync(roots, ct).ConfigureAwait(false);
-        foreach (var root in roots)
+        DisposeSources();
+        var fallbackRoots = await RescanAllAsync(roots, ct).ConfigureAwait(false);
+        foreach (var root in fallbackRoots)
         {
             StartWatcher(root);
         }
@@ -285,7 +403,7 @@ public sealed class IndexingService : IHostedService, IDisposable
         }
     }
 
-    private void DisposeWatchers()
+    private void DisposeSources()
     {
         foreach (var watcher in _watchers)
         {
@@ -293,6 +411,13 @@ public sealed class IndexingService : IHostedService, IDisposable
         }
 
         _watchers.Clear();
+
+        foreach (var source in _usnSources)
+        {
+            source.Dispose(); // 파이프 닫힘 → 헬퍼 종료
+        }
+
+        _usnSources.Clear();
     }
 
     /// <summary>카테고리만 다른 로거 어댑터 (DI 밖에서 워처를 만들 때 사용).</summary>

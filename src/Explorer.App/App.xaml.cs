@@ -94,13 +94,22 @@ public partial class App : Application
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<JsonFavoritesService>>()));
         services.AddSingleton(KeyMap.LoadWithOverrides(AppPaths.KeymapFile));
 
-        // 파일 인덱싱 파이프라인: 스냅샷 즉시 복원 → 백그라운드 재스캔 → FSW 증분 (Phase 7에서 USN으로 교체)
+        // 파일 인덱싱 파이프라인: 스냅샷 즉시 복원 → 백그라운드 재구축(USN 고속/재귀 폴백) → 증분 감시
         services.AddSingleton<FileIndexCatalog>();
         services.AddSingleton(provider => new SqliteIndexSnapshot(
             AppPaths.IndexDbFile,
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<SqliteIndexSnapshot>>()));
         services.AddSingleton<RecursiveScanSource>();
-        services.AddSingleton(IndexingOptions.FromEnvironment());
+        services.AddSingleton(provider =>
+        {
+            // 옵트인(설정) + 권한 헬퍼 경로를 환경 옵션 위에 합친다. 설정은 OnStartup에서 host.Start 전에 로드된다.
+            var settings = provider.GetRequiredService<ISettingsService>();
+            return IndexingOptions.FromEnvironment() with
+            {
+                FastIndexingEnabled = settings.Current.UseFastIndexing,
+                HelperPath = ResolveHelperPath(),
+            };
+        });
         services.AddSingleton<IndexingService>();
         services.AddHostedService(provider => provider.GetRequiredService<IndexingService>());
 
@@ -148,16 +157,40 @@ public partial class App : Application
         services.AddSingleton<SearchPopupWindow>();
     }
 
+    /// <summary>권한 헬퍼 실행 파일 경로를 찾는다 (배포: 앱 옆 / 개발: 형제 프로젝트 bin). 없으면 null.</summary>
+    private static string? ResolveHelperPath()
+    {
+        const string helperExe = "Explorer.Helper.Elevated.exe";
+        var baseDir = AppContext.BaseDirectory;
+
+        // 1) 배포 시 앱 실행 파일과 같은 폴더
+        var sideBySide = Path.Combine(baseDir, helperExe);
+        if (File.Exists(sideBySide))
+        {
+            return sideBySide;
+        }
+
+        // 2) 개발 빌드: ...\src\Explorer.App\bin\<cfg>\net10.0-windows\ → 형제 헬퍼 bin
+        var configuration = new DirectoryInfo(baseDir).Parent?.Name ?? "Debug"; // net10.0-windows의 부모 = <cfg>
+        var devPath = Path.Combine(
+            baseDir, "..", "..", "..", "..",
+            "Explorer.Helper.Elevated", "bin", configuration, "net10.0-windows", helperExe);
+        return File.Exists(devPath) ? Path.GetFullPath(devPath) : null;
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         Log.Information("OnStartup 진입");
         RegisterGlobalExceptionHandlers();
+
+        // 호스티드 인덱싱 서비스가 시작될 때 옵트인 설정을 읽을 수 있도록 설정을 먼저 로드한다.
+        var settings = _host.Services.GetRequiredService<ISettingsService>();
+        settings.Load();
+
         _host.Start();
         Log.Information("호스트 시작 완료");
 
-        var settings = _host.Services.GetRequiredService<ISettingsService>();
-        settings.Load();
         _host.Services.GetRequiredService<IThemeService>().Apply(settings.Current.Theme);
         Log.Information("설정 로드/테마 적용 완료 (테마: {Theme})", settings.Current.Theme);
 
@@ -217,11 +250,14 @@ public partial class App : Application
                 $"전역 검색 핫키({gesture}) 등록 실패 — 다른 앱이 사용 중일 수 있습니다.";
         }
 
+        var settings = _host.Services.GetRequiredService<ISettingsService>();
         _host.Services.GetRequiredService<TrayService>().Initialize(
             window.ShowFromTray,
             popup.Toggle,
             _host.Services.GetRequiredService<IAutoStartService>(),
-            _host.Services.GetRequiredService<AppLifecycle>());
+            _host.Services.GetRequiredService<AppLifecycle>(),
+            getFastIndexing: () => settings.Current.UseFastIndexing,
+            setFastIndexing: enabled => settings.Update(s => s with { UseFastIndexing = enabled }));
     }
 
     protected override void OnExit(ExitEventArgs e)

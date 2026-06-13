@@ -23,7 +23,8 @@ public sealed class MainWindowViewModelTests
         _context.Settings.Update(Arg.Any<Func<AppSettings, AppSettings>>())
             .Returns(call => call.Arg<Func<AppSettings, AppSettings>>()(_context.Settings.Current));
 
-        var workspace = new WorkspaceViewModel(_context.CreateFileList, _context.Undo);
+        var workspace = new WorkspaceViewModel(
+            _context.CreateFileList, _context.Undo, _context.PreviewRegistry, TimeSpan.FromMilliseconds(10));
         var sidebar = new DriveSidebarViewModel(_driveProvider);
         var favorites = new FavoritesViewModel(
             _context.Favorites, Substitute.For<IFileLauncher>(), NullLogger<FavoritesViewModel>.Instance);

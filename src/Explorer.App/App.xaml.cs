@@ -19,6 +19,8 @@ using Explorer.Core.Undo;
 using Explorer.Indexing;
 using Explorer.Indexing.Persistence;
 using Explorer.Indexing.Sources;
+using Explorer.Preview;
+using Explorer.Preview.Renderers;
 using Explorer.Shell.Clipboard;
 using Explorer.Shell.ContextMenu;
 using Explorer.Shell.Drives;
@@ -102,6 +104,15 @@ public partial class App : Application
         services.AddSingleton<IndexingService>();
         services.AddHostedService(provider => provider.GetRequiredService<IndexingService>());
 
+        // 미리보기 렌더러 — 순서가 우선순위, 마지막 Info는 항상 처리하는 폴백.
+        services.AddSingleton<IPreviewRenderer, ImagePreviewRenderer>();
+        services.AddSingleton<IPreviewRenderer, TextPreviewRenderer>();
+        services.AddSingleton<IPreviewRenderer, MediaPreviewRenderer>();
+        services.AddSingleton<IPreviewRenderer, ArchivePreviewRenderer>();
+        services.AddSingleton<IPreviewRenderer, InfoPreviewRenderer>();
+        services.AddSingleton<IPreviewRendererRegistry, PreviewRendererRegistry>();
+        services.AddSingleton<QuickPreviewWindow>();
+
         // 작업 큐 파이프라인: 큐(직렬 워커) → 실행기(충돌 해소 + 셸 호출 + Undo 기록)
         services.AddSingleton<IUndoService, UndoService>();
         services.AddSingleton<IConflictPrompt, DialogConflictPrompt>();
@@ -117,7 +128,8 @@ public partial class App : Application
         services.AddTransient<FileListViewModel>();
         services.AddSingleton<WorkspaceViewModel>(provider => new WorkspaceViewModel(
             provider.GetRequiredService<FileListViewModel>,
-            provider.GetRequiredService<IUndoService>()));
+            provider.GetRequiredService<IUndoService>(),
+            provider.GetRequiredService<IPreviewRendererRegistry>()));
         services.AddSingleton<DriveSidebarViewModel>();
         services.AddSingleton<FavoritesViewModel>();
         services.AddSingleton<OperationQueueViewModel>();

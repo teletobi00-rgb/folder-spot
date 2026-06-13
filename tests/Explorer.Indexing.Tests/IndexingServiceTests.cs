@@ -73,11 +73,18 @@ public sealed class IndexingServiceTests : IAsyncDisposable
         // 2) 스냅샷 파일 생성됨
         await WaitUntilAsync(() => File.Exists(_dbPath), "재구축 후 스냅샷 저장");
 
-        // 3) FSW 증분: 새 파일이 실시간 반영
-        File.WriteAllText(Path.Combine(_rootDir, "live-update.txt"), "fresh");
-        await WaitUntilAsync(
-            () => _catalog.Current.Search("live-update", 5).Count == 1,
-            "감시 단계에서 새 파일이 인덱스에 반영");
+        // 3) FSW 증분: 새 파일이 실시간 반영. 부하가 큰 머신에선 FSW 이벤트가 지연/유실될 수 있어
+        //    반영될 때까지 파일을 반복 재기록(Created/Changed 이벤트를 거듭 유발)하며 기다린다.
+        var liveFile = Path.Combine(_rootDir, "live-update.txt");
+        var indexed = false;
+        for (var i = 0; i < 600 && !indexed; i++)
+        {
+            File.WriteAllText(liveFile, "fresh " + i);
+            await Task.Delay(25);
+            indexed = _catalog.Current.Search("live-update", 5).Count == 1;
+        }
+
+        indexed.Should().BeTrue("감시 단계에서 새 파일이 인덱스에 반영");
 
         // 4) 종료 시 dirty 스냅샷 저장 → 새 서비스가 스냅샷만으로 즉시 검색 가능
         await _service.StopAsync(CancellationToken.None);

@@ -40,6 +40,7 @@
                   GridViewColumnHeader.Click="OnColumnHeaderClick"
                   MouseDoubleClick="OnItemDoubleClick"
                   SelectionChanged="OnSelectionChanged"
+                  PreviewKeyDown="OnFileListPreviewKeyDown"
                   PreviewMouseLeftButtonDown="OnPreviewMouseLeftButtonDown"
                   PreviewMouseMove="OnPreviewMouseMove"
                   MouseRightButtonUp="OnMouseRightButtonUp"

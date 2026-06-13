@@ -13,6 +13,8 @@
             <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
             <converters:ActiveSideToBrushConverter x:Key="ActiveSideToBrushConverter" />
             <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter" />
+            <converters:PreviewKindToVisibilityConverter x:Key="PreviewKindToVisibilityConverter" />
+            <converters:FileSizeConverter x:Key="FileSizeConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

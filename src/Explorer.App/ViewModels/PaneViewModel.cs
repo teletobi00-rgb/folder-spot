@@ -22,6 +22,14 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private TabViewModel? _activeTab;
 
+    /// <summary>이 페인이 미리보기 표면일 때 true — 뷰는 파일 목록 대신 미리보기를 보여준다.</summary>
+    [ObservableProperty]
+    private bool _isPreviewMode;
+
+    /// <summary>미리보기 표면일 때 바인딩할 공유 미리보기 VM (워크스페이스 소유).</summary>
+    [ObservableProperty]
+    private PreviewViewModel? _preview;
+
     public PaneViewModel(FileListViewModel fileList, string initialPath)
     {
         ArgumentNullException.ThrowIfNull(fileList);
@@ -149,6 +157,21 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
             : _state.AddTab(tab);
         RebuildTabs();
         await ApplyActiveTabToFileListAsync();
+    }
+
+    /// <summary>이 페인을 미리보기 표면으로 전환한다 (Ctrl+Q).</summary>
+    public void EnterPreview(PreviewViewModel preview)
+    {
+        ArgumentNullException.ThrowIfNull(preview);
+        Preview = preview;
+        IsPreviewMode = true;
+    }
+
+    /// <summary>미리보기를 끄고 파일 목록으로 되돌린다.</summary>
+    public void ExitPreview()
+    {
+        IsPreviewMode = false;
+        Preview = null;
     }
 
     public void Dispose()

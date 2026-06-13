@@ -69,6 +69,21 @@ public partial class FileListView : UserControl
         StatusText.Visibility = text is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
+    /// <summary>Space — 선택한 파일의 빠른 미리보기(macOS Quick Look 방식). 편집 중에는 무시.</summary>
+    private void OnFileListPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Space || e.OriginalSource is TextBox)
+        {
+            return; // 이름 변경 등 편집 중에는 기본 동작
+        }
+
+        if (ViewModel?.SelectedItem is { IsDirectory: false } file)
+        {
+            e.Handled = true;
+            App.Services.GetRequiredService<QuickPreviewWindow>().Toggle(file.Entry.FullPath);
+        }
+    }
+
     private void OnColumnHeaderClick(object sender, RoutedEventArgs e)
     {
         if (e.OriginalSource is not GridViewColumnHeader { Column: { } column } || ViewModel is null)

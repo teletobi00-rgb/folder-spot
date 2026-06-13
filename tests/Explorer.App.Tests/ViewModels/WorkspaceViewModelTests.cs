@@ -12,7 +12,11 @@ public sealed class WorkspaceViewModelTests
 {
     private readonly FileListTestContext _context = new();
 
-    private WorkspaceViewModel CreateWorkspace() => new(_context.CreateFileList, Substitute.For<Explorer.Core.Undo.IUndoService>());
+    private WorkspaceViewModel CreateWorkspace() => new(
+        _context.CreateFileList,
+        Substitute.For<Explorer.Core.Undo.IUndoService>(),
+        _context.PreviewRegistry,
+        TimeSpan.FromMilliseconds(10));
 
     [Fact]
     public void Ctor_StartsSinglePaneLeftActive()
@@ -257,5 +261,97 @@ public sealed class WorkspaceViewModelTests
         await workspace.OpenInOtherPaneCommand.ExecuteAsync(null);
 
         workspace.RightPane.FileList.CurrentPath.Should().Be(@"C:\src");
+    }
+
+    [Fact]
+    public void ToggleQuickView_DisabledInSingleMode()
+    {
+        var workspace = CreateWorkspace();
+
+        workspace.ToggleQuickViewCommand.CanExecute(null).Should().BeFalse("미리보기는 듀얼 모드 전용");
+    }
+
+    [Fact]
+    public async Task ToggleQuickView_ShowsPreviewInInactivePane()
+    {
+        var workspace = await CreateDualWorkspaceAsync();
+
+        workspace.ToggleQuickViewCommand.Execute(null);
+
+        workspace.IsQuickViewActive.Should().BeTrue();
+        workspace.RightPane.IsPreviewMode.Should().BeTrue("활성=좌, 미리보기는 비활성(우)에 표시");
+        workspace.RightPane.Preview.Should().BeSameAs(workspace.Preview);
+        workspace.LeftPane.IsPreviewMode.Should().BeFalse("활성 페인은 파일 목록 유지");
+    }
+
+    [Fact]
+    public async Task ToggleQuickView_Twice_RestoresFileList()
+    {
+        var workspace = await CreateDualWorkspaceAsync();
+
+        workspace.ToggleQuickViewCommand.Execute(null);
+        workspace.ToggleQuickViewCommand.Execute(null);
+
+        workspace.IsQuickViewActive.Should().BeFalse();
+        workspace.RightPane.IsPreviewMode.Should().BeFalse();
+        workspace.RightPane.Preview.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ExitDualMode_DeactivatesQuickView()
+    {
+        var workspace = await CreateDualWorkspaceAsync();
+        workspace.ToggleQuickViewCommand.Execute(null);
+
+        await workspace.ToggleDualModeCommand.ExecuteAsync(null); // 단일 모드로
+
+        workspace.IsQuickViewActive.Should().BeFalse();
+        workspace.RightPane.IsPreviewMode.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SelectingFile_DrivesPreview_FromActivePane()
+    {
+        using var temp = new TempDir();
+        var filePath = temp.WriteFile("preview-me.txt", "내용");
+        var workspace = await CreateDualWorkspaceAsync();
+        workspace.ToggleQuickViewCommand.Execute(null);
+
+        // 활성(좌) 페인에서 파일 선택 → 미리보기가 그 파일을 따라간다
+        workspace.LeftPane.FileList.SelectedItem = Item(filePath);
+
+        await FileListTestContext.WaitUntilAsync(
+            () => workspace.Preview.Result.FilePath == filePath,
+            "선택한 파일이 미리보기에 반영");
+        workspace.Preview.Kind.Should().Be(Explorer.Preview.PreviewKind.Info, "Info 폴백 렌더러 결과");
+    }
+
+    private sealed class TempDir : IDisposable
+    {
+        public TempDir()
+        {
+            Root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ExplorerWsTests", Guid.NewGuid().ToString("N"));
+            System.IO.Directory.CreateDirectory(Root);
+        }
+
+        public string Root { get; }
+
+        public string WriteFile(string name, string content)
+        {
+            var path = System.IO.Path.Combine(Root, name);
+            System.IO.File.WriteAllText(path, content);
+            return path;
+        }
+
+        public void Dispose()
+        {
+            try
+            {
+                System.IO.Directory.Delete(Root, recursive: true);
+            }
+            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
+            {
+            }
+        }
     }
 }

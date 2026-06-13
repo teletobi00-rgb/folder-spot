@@ -67,8 +67,12 @@
                        ToolTip="새 탭 (Ctrl+T)" />
         </Grid>
 
-        <views:FileListView x:Name="FileArea"
-                            Grid.Row="1"
-                            DataContext="{Binding FileList}" />
+        <Grid Grid.Row="1">
+            <views:FileListView x:Name="FileArea"
+                                DataContext="{Binding FileList}"
+                                Visibility="{Binding IsPreviewMode, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+            <views:PreviewView DataContext="{Binding Preview}"
+                               Visibility="{Binding IsPreviewMode, Converter={StaticResource BooleanToVisibilityConverter}}" />
+        </Grid>
     </Grid>
 </UserControl>

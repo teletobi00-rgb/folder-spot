@@ -31,6 +31,7 @@ public partial class MainWindow : FluentWindow
         [KeyActions.MoveToOtherPane] = "Workspace.MoveToOtherPaneCommand",
         [KeyActions.OpenInOtherPane] = "Workspace.OpenInOtherPaneCommand",
         [KeyActions.Undo] = "Workspace.UndoCommand",
+        [KeyActions.ToggleQuickView] = "Workspace.ToggleQuickViewCommand",
     };
 
     private readonly MainWindowViewModel _viewModel;

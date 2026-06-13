@@ -1,8 +1,10 @@
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Explorer.Core.FileSystem;
 using Explorer.Core.Undo;
 using Explorer.Core.Workspace;
+using Explorer.Preview;
 
 namespace Explorer.App.ViewModels;
 
@@ -29,18 +31,36 @@ public sealed partial class WorkspaceViewModel : ObservableObject, IDisposable
     private PaneViewModel _rightPane;
 
     private readonly IUndoService _undo;
+    private readonly IPreviewRendererRegistry _previewRegistry;
+    private readonly TimeSpan? _previewDebounce;
+    private PreviewCoordinator? _previewCoordinator;
+    private PaneViewModel? _previewPane;   // 미리보기를 표시하는 페인
+    private PaneViewModel? _driverPane;     // 선택을 따라가는(파일 목록) 페인
 
-    public WorkspaceViewModel(Func<FileListViewModel> fileListFactory, IUndoService undo)
+    [ObservableProperty]
+    private bool _isQuickViewActive;
+
+    public WorkspaceViewModel(
+        Func<FileListViewModel> fileListFactory,
+        IUndoService undo,
+        IPreviewRendererRegistry previewRegistry,
+        TimeSpan? previewDebounce = null)
     {
         ArgumentNullException.ThrowIfNull(fileListFactory);
         ArgumentNullException.ThrowIfNull(undo);
+        ArgumentNullException.ThrowIfNull(previewRegistry);
         _undo = undo;
+        _previewRegistry = previewRegistry;
+        _previewDebounce = previewDebounce;
 
         // 두 페인 모두 즉시 생성한다(VM 할당은 가볍다). 지연되는 것은 우측 페인의 "탐색"으로,
         // 듀얼 모드를 처음 켤 때 ActivateCurrentTabAsync가 수행한다.
         _leftPane = new PaneViewModel(fileListFactory(), DefaultStartPath);
         _rightPane = new PaneViewModel(fileListFactory(), DefaultStartPath);
     }
+
+    /// <summary>반대 페인 미리보기(Ctrl+Q)가 쓰는 공유 미리보기 VM.</summary>
+    public PreviewViewModel Preview { get; } = new();
 
     public PaneViewModel LeftPane
     {
@@ -110,19 +130,94 @@ public sealed partial class WorkspaceViewModel : ObservableObject, IDisposable
 
     /// <summary>Tab — 활성 페인 전환.</summary>
     [RelayCommand(CanExecute = nameof(IsDualMode))]
-    private void SwitchPane() =>
+    private void SwitchPane()
+    {
+        // 미리보기 페인이 활성이 되는 혼란을 막기 위해 먼저 끈다.
+        DeactivateQuickView();
         ActiveSide = ActiveSide == PaneSide.Left ? PaneSide.Right : PaneSide.Left;
+    }
 
     /// <summary>Ctrl+U — 좌/우 페인 내용 교환 (커서는 같은 쪽에 남는다, TC 동작).</summary>
     [RelayCommand(CanExecute = nameof(IsDualMode))]
     private void SwapPanes()
     {
+        // 스왑은 미리보기 표면/구동 관계를 뒤집어 혼란스러우므로 먼저 끈다.
+        DeactivateQuickView();
+
         // 프로퍼티 setter 두 번으로 바꾸면 첫 알림 시점에 좌==우인 중간 상태가 바인딩에 노출된다 —
         // 백킹 필드를 먼저 모두 교환한 뒤 일괄 통지한다.
         (_leftPane, _rightPane) = (_rightPane, _leftPane);
         OnPropertyChanged(nameof(LeftPane));
         OnPropertyChanged(nameof(RightPane));
         NotifyPaneDerivedProperties();
+    }
+
+    /// <summary>Ctrl+Q — 반대 페인 미리보기 토글. 미리보기는 비활성 페인에 뜨고 활성 페인 선택을 따라간다.</summary>
+    [RelayCommand(CanExecute = nameof(IsDualMode))]
+    private void ToggleQuickView()
+    {
+        if (IsQuickViewActive)
+        {
+            DeactivateQuickView();
+        }
+        else
+        {
+            ActivateQuickView();
+        }
+    }
+
+    private void ActivateQuickView()
+    {
+        _previewCoordinator ??= CreateCoordinator();
+        _previewPane = InactivePane;
+        _driverPane = ActivePane;
+        _previewPane.EnterPreview(Preview);
+        _driverPane.FileList.PropertyChanged += OnDriverPropertyChanged;
+        IsQuickViewActive = true;
+        RequestPreviewForCurrentSelection();
+    }
+
+    private void DeactivateQuickView()
+    {
+        if (!IsQuickViewActive)
+        {
+            return;
+        }
+
+        if (_driverPane is not null)
+        {
+            _driverPane.FileList.PropertyChanged -= OnDriverPropertyChanged;
+        }
+
+        _previewPane?.ExitPreview();
+        _previewPane = null;
+        _driverPane = null;
+        _previewCoordinator?.Clear();
+        Preview.Clear();
+        IsQuickViewActive = false;
+    }
+
+    private PreviewCoordinator CreateCoordinator()
+    {
+        var coordinator = new PreviewCoordinator(_previewRegistry, _previewDebounce);
+        coordinator.LoadingChanged += (_, loading) => Preview.IsLoading = loading;
+        coordinator.PreviewReady += (_, result) => Preview.Apply(result);
+        return coordinator;
+    }
+
+    private void OnDriverPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(FileListViewModel.SelectedItem))
+        {
+            RequestPreviewForCurrentSelection();
+        }
+    }
+
+    private void RequestPreviewForCurrentSelection()
+    {
+        var selected = _driverPane?.FileList.SelectedItem;
+        var path = selected is { IsDirectory: false } file ? file.Entry.FullPath : null;
+        _previewCoordinator?.Request(path);
     }
 
     private void NotifyPaneDerivedProperties()
@@ -193,6 +288,9 @@ public sealed partial class WorkspaceViewModel : ObservableObject, IDisposable
         ArgumentNullException.ThrowIfNull(sourcePane);
         ArgumentNullException.ThrowIfNull(tab);
 
+        // 탭 이동은 페인 내용을 바꾸므로 미리보기 컨텍스트가 어긋난다 — 먼저 끈다.
+        DeactivateQuickView();
+
         var targetPane = ReferenceEquals(sourcePane, LeftPane) ? RightPane : LeftPane;
         if (await sourcePane.DetachTabAsync(tab) is not { } detached)
         {
@@ -228,17 +326,26 @@ public sealed partial class WorkspaceViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        DeactivateQuickView(); // 구동 페인 구독 해제
+        _previewCoordinator?.Dispose();
         LeftPane.Dispose();
         RightPane.Dispose();
     }
 
     partial void OnIsDualModeChanged(bool value)
     {
+        if (!value)
+        {
+            // 단일 모드로 돌아가면 반대 페인 미리보기를 끈다.
+            DeactivateQuickView();
+        }
+
         SwitchPaneCommand.NotifyCanExecuteChanged();
         SwapPanesCommand.NotifyCanExecuteChanged();
         CopyToOtherPaneCommand.NotifyCanExecuteChanged();
         MoveToOtherPaneCommand.NotifyCanExecuteChanged();
         OpenInOtherPaneCommand.NotifyCanExecuteChanged();
+        ToggleQuickViewCommand.NotifyCanExecuteChanged();
     }
 
     private async Task TransferToOtherPaneAsync(bool move)

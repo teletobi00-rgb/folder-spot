@@ -6,6 +6,8 @@ using Explorer.Core.FileSystem;
 using Explorer.Core.Operations;
 using Explorer.Core.Settings;
 using Explorer.Core.Undo;
+using Explorer.Preview;
+using Explorer.Preview.Renderers;
 using Explorer.Shell.Icons;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -32,6 +34,10 @@ internal sealed class FileListTestContext
     public IUndoService Undo { get; } = new UndoService();
 
     public IOperationQueue Queue { get; }
+
+    /// <summary>실제 레지스트리(Info 폴백만) — 미리보기 통합 테스트용.</summary>
+    public IPreviewRendererRegistry PreviewRegistry { get; } = new PreviewRendererRegistry(
+        [new InfoPreviewRenderer()], NullLogger<PreviewRendererRegistry>.Instance);
 
     public FileListTestContext()
     {

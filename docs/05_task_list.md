@@ -236,6 +236,12 @@ View — 수동
 ---
 
 ## Phase 9: 미리보기 → ⭐ v1.0
+> ✅ 2026-06-13 완료 — **v1.0 사용자 대면 기능 완성.** 테스트 417개(Preview 45 신규).
+> 구현: Explorer.Preview(순수 로직, net10.0) — 렌더러 레지스트리(first-match) + 이미지/텍스트(인코딩 감지·언어 힌트·1MB 캡·UTF-8 경계 트림)/
+> 미디어/압축(SharpCompress 목록)/정보 폴백, PreviewCoordinator(250ms 디바운스+취소). App: PreviewViewModel(이미지 오프스레드 디코드+다운스케일),
+> 반대 페인 미리보기 탭 Ctrl+Q(비활성 페인 표시, 활성 페인 선택 추적), Space 퀵 프리뷰 오버레이(QuickPreviewWindow, AvalonEdit/MediaElement).
+> 리뷰 HIGH 2 수정: 숨김 시 미디어 정지, 이미지 디코드 UI 스레드 차단 → 백그라운드. MEDIUM: 페인 전환/탭 이동/Dispose 시 퀵뷰 해제.
+> 이월(백로그): IPreviewHandler 호스팅(Office/PDF — PowerToys Peek 방식), 이미지 EXIF 회전 명시 처리, GIF 애니메이션.
 
 - [ ] 9.1 `IPreviewRenderer` + 레지스트리(확장자 first-match) — **TDD**
 - [ ] 9.2 이미지(EXIF 회전·다운스케일) · 9.3 텍스트/코드(AvalonEdit·인코딩 감지 TDD) · 9.4 미디어 · 9.5 압축 목록(**TDD**)

@@ -27,6 +27,7 @@ public static class KeyActions
     public const string MoveToOtherPane = "Workspace.MoveToOther";
     public const string OpenInOtherPane = "Workspace.OpenInOther";
     public const string Undo = "Edit.Undo";
+    public const string ToggleQuickView = "Workspace.QuickView";
 
     /// <summary>전역(앱 밖) 핫키 — 윈도우 InputBindings가 아니라 RegisterHotKey로 처리된다.</summary>
     public const string GlobalSearch = "Global.Search";
@@ -54,6 +55,7 @@ public sealed class KeyMap
         [KeyActions.MoveToOtherPane] = "F6",
         [KeyActions.OpenInOtherPane] = "Ctrl+Right;Ctrl+Left",
         [KeyActions.Undo] = "Ctrl+Z",
+        [KeyActions.ToggleQuickView] = "Ctrl+Q",
 
         // Win+Space는 OS가 IME 전환에 예약 — PowerToys Run과 같은 이유로 Alt+Space가 기본.
         [KeyActions.GlobalSearch] = "Alt+Space",

@@ -211,14 +211,12 @@ public partial class MainWindow : FluentWindow
         }
     }
 
-    private void OnFavoriteSelectionChanged(object sender, SelectionChangedEventArgs e)
+    /// <summary>즐겨찾기는 좌클릭에서만 연다 — 우클릭(메뉴)이나 호버 버튼 클릭으로는 실행되지 않도록.</summary>
+    private void OnFavoriteRowClick(object sender, MouseButtonEventArgs e)
     {
-        if (FavoritesList.SelectedItem is FavoriteItemViewModel favorite)
+        if (sender is FrameworkElement { DataContext: FavoriteItemViewModel favorite })
         {
             _viewModel.Favorites.OpenCommand.Execute(favorite);
-
-            // 선택을 비워 같은 항목 재클릭도 다시 동작하게 한다.
-            FavoritesList.SelectedItem = null;
         }
     }
 

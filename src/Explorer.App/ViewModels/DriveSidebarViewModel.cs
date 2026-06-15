@@ -51,6 +51,16 @@ public sealed class DriveItemViewModel
         DetailText = entry.IsReady
             ? $"{FileSizeFormatter.Format(entry.FreeSpace)} 사용 가능 / {FileSizeFormatter.Format(entry.TotalSize)}"
             : "준비되지 않음";
+
+        Glyph = entry.Kind switch
+        {
+            DriveKind.Fixed => "💽",
+            DriveKind.Removable => "💾",
+            DriveKind.Network => "🌐",
+            DriveKind.Optical => "💿",
+            DriveKind.Ram => "⚡",
+            _ => "💽",
+        };
     }
 
     public string RootPath { get; }
@@ -58,6 +68,9 @@ public sealed class DriveItemViewModel
     public string DisplayName { get; }
 
     public string DetailText { get; }
+
+    /// <summary>드라이브 종류별 아이콘 글리프(이모지).</summary>
+    public string Glyph { get; }
 
     private static string DefaultLabel(DriveKind kind) => kind switch
     {

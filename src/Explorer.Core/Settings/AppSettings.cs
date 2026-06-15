@@ -20,6 +20,9 @@ public sealed record AppSettings
     /// </summary>
     public bool UseFastIndexing { get; init; }
 
+    /// <summary>네트워크/매핑 드라이브도 인덱싱할지(기본 꺼짐 — USN 불가 + 재귀 스캔이 느리고 무겁다).</summary>
+    public bool IndexNetworkDrives { get; init; }
+
     /// <summary>마지막 세션의 탭/페인 구성 (최초 실행이면 null).</summary>
     public WorkspaceSession? Session { get; init; }
 

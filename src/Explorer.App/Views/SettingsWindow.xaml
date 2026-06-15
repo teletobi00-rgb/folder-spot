@@ -50,6 +50,12 @@
                 <CheckBox Margin="0,4,0,0"
                           Content="빠른 인덱싱 (NTFS·관리자 — 다음 시작부터 적용)"
                           IsChecked="{Binding UseFastIndexing}" />
+                <CheckBox Margin="0,4,0,0"
+                          Content="네트워크 드라이브 인덱싱 (느림·재귀 스캔 — 다음 시작부터 적용)"
+                          IsChecked="{Binding IndexNetworkDrives}" />
+                <CheckBox Margin="0,4,0,0"
+                          Content="Windows 시작 시 자동 실행 (부팅 후 인덱싱 시작)"
+                          IsChecked="{Binding AutoStartOnBoot}" />
 
                 <Separator Margin="0,16" />
 

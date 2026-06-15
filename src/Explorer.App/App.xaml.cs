@@ -115,6 +115,7 @@ public partial class App : Application
             return IndexingOptions.FromEnvironment() with
             {
                 FastIndexingEnabled = settings.Current.UseFastIndexing,
+                IndexNetworkDrives = settings.Current.IndexNetworkDrives,
                 HelperPath = ResolveHelperPath(),
             };
         });

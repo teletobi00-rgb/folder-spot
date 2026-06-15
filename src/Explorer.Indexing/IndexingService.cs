@@ -37,6 +37,9 @@ public sealed record IndexingOptions
     /// <summary>NTFS MFT/USN 고속 경로 사용(옵트인). 끄면 재귀+FSW 폴백.</summary>
     public bool FastIndexingEnabled { get; init; }
 
+    /// <summary>네트워크/매핑 드라이브도 인덱싱(옵트인 — 재귀 스캔, 느림).</summary>
+    public bool IndexNetworkDrives { get; init; }
+
     /// <summary>권한 헬퍼 실행 파일 경로 (없으면 USN 비활성).</summary>
     public string? HelperPath { get; init; }
 
@@ -200,7 +203,9 @@ public sealed class IndexingService : IHostedService, IDisposable
         }
 
         return [.. _drives.GetDrives()
-            .Where(d => d.IsReady && d.Kind == DriveKind.Fixed)
+            .Where(d => d.IsReady
+                && (d.Kind == DriveKind.Fixed
+                    || (_options.IndexNetworkDrives && d.Kind == DriveKind.Network)))
             .Select(d => d.RootPath)];
     }
 

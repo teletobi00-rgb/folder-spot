@@ -13,12 +13,19 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly ISettingsService _settings;
     private readonly IThemeService _theme;
     private readonly ExtensionColorMap _colorMap;
+    private readonly IAutoStartService _autoStart;
 
     [ObservableProperty]
     private AppTheme _selectedTheme;
 
     [ObservableProperty]
     private bool _useFastIndexing;
+
+    [ObservableProperty]
+    private bool _indexNetworkDrives;
+
+    [ObservableProperty]
+    private bool _autoStartOnBoot;
 
     /// <summary>저장이 실제로 적용됐는지(닫은 뒤 목록 새로고침 판단용).</summary>
     public bool Saved { get; private set; }
@@ -27,14 +34,17 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public IReadOnlyList<AppTheme> Themes { get; } = [AppTheme.System, AppTheme.Light, AppTheme.Dark];
 
-    public SettingsViewModel(ISettingsService settings, IThemeService theme, ExtensionColorMap colorMap)
+    public SettingsViewModel(
+        ISettingsService settings, IThemeService theme, ExtensionColorMap colorMap, IAutoStartService autoStart)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(theme);
         ArgumentNullException.ThrowIfNull(colorMap);
+        ArgumentNullException.ThrowIfNull(autoStart);
         _settings = settings;
         _theme = theme;
         _colorMap = colorMap;
+        _autoStart = autoStart;
         LoadFromSettings();
     }
 
@@ -43,6 +53,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         var current = _settings.Current;
         SelectedTheme = current.Theme;
         UseFastIndexing = current.UseFastIndexing;
+        IndexNetworkDrives = current.IndexNetworkDrives;
+        AutoStartOnBoot = _autoStart.IsEnabled;
         FillRows(current.ExtensionColors);
     }
 
@@ -88,9 +100,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         {
             Theme = SelectedTheme,
             UseFastIndexing = UseFastIndexing,
+            IndexNetworkDrives = IndexNetworkDrives,
             ExtensionColors = colors,
         });
         _theme.Apply(SelectedTheme);
+        _autoStart.SetEnabled(AutoStartOnBoot);
         _colorMap.Reload();
         Saved = true;
     }

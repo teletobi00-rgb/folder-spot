@@ -29,8 +29,10 @@ public sealed class MainWindowViewModelTests
         var favorites = new FavoritesViewModel(
             _context.Favorites, Substitute.For<IFileLauncher>(), NullLogger<FavoritesViewModel>.Instance);
         var operationQueue = new OperationQueueViewModel(_context.Queue);
+        var programLauncher = new ProgramLauncherViewModel(_context.Settings);
         return new MainWindowViewModel(
-            _context.Settings, _themeService, workspace, sidebar, favorites, operationQueue, KeyMap.CreateDefault());
+            _context.Settings, _themeService, workspace, sidebar, favorites, operationQueue, programLauncher,
+            KeyMap.CreateDefault());
     }
 
     [Fact]

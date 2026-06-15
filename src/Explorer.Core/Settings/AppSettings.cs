@@ -34,4 +34,10 @@ public sealed record AppSettings
 
     /// <summary>썸네일 보기의 셀 크기(px). 작게 64 / 보통 96 / 크게 144.</summary>
     public int ThumbnailSize { get; init; } = 96;
+
+    /// <summary>상단 빠른 실행 바를 표시할지.</summary>
+    public bool ShowProgramLauncher { get; init; } = true;
+
+    /// <summary>상단 빠른 실행 바에 고정된 프로그램(명령 또는 전체 경로). 기본: 계산기·명령 프롬프트·Edge.</summary>
+    public ImmutableArray<string> PinnedPrograms { get; init; } = ["calc.exe", "cmd.exe", "msedge.exe"];
 }

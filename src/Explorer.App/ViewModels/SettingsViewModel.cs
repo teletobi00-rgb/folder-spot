@@ -27,6 +27,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _autoStartOnBoot;
 
+    [ObservableProperty]
+    private bool _showProgramLauncher;
+
     /// <summary>저장이 실제로 적용됐는지(닫은 뒤 목록 새로고침 판단용).</summary>
     public bool Saved { get; private set; }
 
@@ -55,6 +58,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         UseFastIndexing = current.UseFastIndexing;
         IndexNetworkDrives = current.IndexNetworkDrives;
         AutoStartOnBoot = _autoStart.IsEnabled;
+        ShowProgramLauncher = current.ShowProgramLauncher;
         FillRows(current.ExtensionColors);
     }
 
@@ -101,6 +105,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             Theme = SelectedTheme,
             UseFastIndexing = UseFastIndexing,
             IndexNetworkDrives = IndexNetworkDrives,
+            ShowProgramLauncher = ShowProgramLauncher,
             ExtensionColors = colors,
         });
         _theme.Apply(SelectedTheme);

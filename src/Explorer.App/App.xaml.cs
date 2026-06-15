@@ -156,6 +156,7 @@ public partial class App : Application
         services.AddSingleton<DriveSidebarViewModel>();
         services.AddSingleton<FavoritesViewModel>();
         services.AddSingleton<OperationQueueViewModel>();
+        services.AddSingleton<ProgramLauncherViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
         services.AddTransient<SettingsViewModel>();

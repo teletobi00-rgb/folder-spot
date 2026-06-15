@@ -56,6 +56,9 @@
                 <CheckBox Margin="0,4,0,0"
                           Content="Windows 시작 시 자동 실행 (부팅 후 인덱싱 시작)"
                           IsChecked="{Binding AutoStartOnBoot}" />
+                <CheckBox Margin="0,4,0,0"
+                          Content="상단 빠른 실행 바 표시 (자주 쓰는 프로그램)"
+                          IsChecked="{Binding ShowProgramLauncher}" />
 
                 <Separator Margin="0,16" />
 

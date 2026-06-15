@@ -23,6 +23,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         DriveSidebarViewModel driveSidebar,
         FavoritesViewModel favorites,
         OperationQueueViewModel operationQueue,
+        ProgramLauncherViewModel programLauncher,
         KeyMap keyMap)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -31,6 +32,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(driveSidebar);
         ArgumentNullException.ThrowIfNull(favorites);
         ArgumentNullException.ThrowIfNull(operationQueue);
+        ArgumentNullException.ThrowIfNull(programLauncher);
         ArgumentNullException.ThrowIfNull(keyMap);
         _settings = settings;
         _themeService = themeService;
@@ -38,6 +40,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         DriveSidebar = driveSidebar;
         Favorites = favorites;
         OperationQueue = operationQueue;
+        ProgramLauncher = programLauncher;
         KeyMap = keyMap;
         AddressBar = new AddressBarViewModel();
         _currentTheme = settings.Current.Theme;
@@ -59,6 +62,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public FavoritesViewModel Favorites { get; }
 
     public OperationQueueViewModel OperationQueue { get; }
+
+    public ProgramLauncherViewModel ProgramLauncher { get; }
 
     public KeyMap KeyMap { get; }
 

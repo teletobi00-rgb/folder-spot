@@ -198,8 +198,30 @@ public partial class MainWindow : FluentWindow
         {
             // 툴바 테마 토글 상태를 설정 창 변경과 동기화하고, 색상 즉시 반영을 위해 양쪽 페인 새로고침.
             _viewModel.SyncThemeFromSettings();
+            _viewModel.ProgramLauncher.SyncVisibilityFromSettings();
             _viewModel.Workspace.LeftPane.FileList.RefreshCommand.Execute(null);
             _viewModel.Workspace.RightPane.FileList.RefreshCommand.Execute(null);
+        }
+    }
+
+    private void OnLauncherDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Link : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    /// <summary>실행 파일/바로가기를 빠른 실행 바에 드롭하면 고정한다.</summary>
+    private void OnLauncherDrop(object sender, DragEventArgs e)
+    {
+        e.Handled = true;
+        if (e.Data.GetData(DataFormats.FileDrop) is not string[] paths)
+        {
+            return;
+        }
+
+        foreach (var path in paths)
+        {
+            _viewModel.ProgramLauncher.Add(path);
         }
     }
 

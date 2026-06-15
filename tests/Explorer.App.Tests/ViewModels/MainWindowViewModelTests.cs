@@ -40,10 +40,10 @@ public sealed class MainWindowViewModelTests
     }
 
     [Theory]
-    [InlineData(AppTheme.System, AppTheme.Light)]
+    [InlineData(AppTheme.System, AppTheme.Dark)]
     [InlineData(AppTheme.Light, AppTheme.Dark)]
-    [InlineData(AppTheme.Dark, AppTheme.System)]
-    public void ToggleTheme_CyclesTheme_AppliesAndPersists(AppTheme from, AppTheme expected)
+    [InlineData(AppTheme.Dark, AppTheme.Light)]
+    public void ToggleTheme_TogglesDarkLight_AppliesAndPersists(AppTheme from, AppTheme expected)
     {
         var vm = CreateViewModel(from);
 

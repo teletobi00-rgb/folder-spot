@@ -69,9 +69,17 @@ public partial class FileListView : UserControl
         StatusText.Visibility = text is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
-    /// <summary>Space — 선택한 파일의 빠른 미리보기(macOS Quick Look 방식). 편집 중에는 무시.</summary>
+    /// <summary>Ctrl+F → 빠른 필터 포커스, Space → 빠른 미리보기. 편집 중에는 무시.</summary>
     private void OnFileListPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.F && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            e.Handled = true;
+            FilterBox.Focus();
+            FilterBox.SelectAll();
+            return;
+        }
+
         if (e.Key != Key.Space || e.OriginalSource is TextBox)
         {
             return; // 이름 변경 등 편집 중에는 기본 동작
@@ -81,6 +89,31 @@ public partial class FileListView : UserControl
         {
             e.Handled = true;
             App.Services.GetRequiredService<QuickPreviewWindow>().Toggle(file.Entry.FullPath);
+        }
+    }
+
+    /// <summary>필터 박스: Esc로 필터 해제+목록 복귀, Down/Enter로 목록으로 이동.</summary>
+    private void OnFilterBoxKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            if (ViewModel is not null)
+            {
+                ViewModel.FilterText = string.Empty;
+            }
+
+            FileList.Focus();
+        }
+        else if (e.Key is Key.Down or Key.Return)
+        {
+            e.Handled = true;
+            if (ViewModel is { Items.Count: > 0 } vm)
+            {
+                vm.SelectedItem ??= vm.Items[0];
+            }
+
+            FileList.Focus();
         }
     }
 

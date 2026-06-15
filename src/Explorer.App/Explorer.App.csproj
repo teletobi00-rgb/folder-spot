@@ -5,6 +5,7 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <AssemblyTitle>Folder Spot</AssemblyTitle>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,6 +25,8 @@
     <Resource Include="Assets\Fonts\Pretendard-Medium.otf" />
     <Resource Include="Assets\Fonts\Pretendard-SemiBold.otf" />
     <Resource Include="Assets\Fonts\Pretendard-Bold.otf" />
+    <!-- 실행/창/트레이 아이콘 (플레이스홀더 — 추후 교체) -->
+    <Resource Include="Assets\app.ico" />
   </ItemGroup>
 
   <ItemGroup>

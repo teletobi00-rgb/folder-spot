@@ -9,6 +9,7 @@
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewmodels:MainWindowViewModel}"
                  Title="Folder Spot"
+                 Icon="pack://application:,,,/Assets/app.ico"
                  Width="1280"
                  Height="760"
                  WindowStartupLocation="CenterScreen"
@@ -65,7 +66,13 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="Folder Spot" />
+        <ui:TitleBar Grid.Row="0" Title="Folder Spot">
+            <ui:TitleBar.Icon>
+                <ui:ImageIcon Width="18"
+                              Height="18"
+                              Source="pack://application:,,,/Assets/app.ico" />
+            </ui:TitleBar.Icon>
+        </ui:TitleBar>
 
         <!-- 툴바: 네비게이션 + 주소창 + 분할/테마 -->
         <Grid Grid.Row="1" Margin="8,4">
@@ -94,14 +101,14 @@
                            ToolTip="새로 고침 (Ctrl+R)" />
             </StackPanel>
 
-            <TextBox Grid.Column="1"
-                     VerticalAlignment="Center"
-                     Text="{Binding AddressBar.Text, UpdateSourceTrigger=PropertyChanged}"
-                     ToolTip="{Binding AddressBar.ErrorText}">
-                <TextBox.InputBindings>
+            <ui:TextBox Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Text="{Binding AddressBar.Text, UpdateSourceTrigger=PropertyChanged}"
+                        ToolTip="{Binding AddressBar.ErrorText}">
+                <ui:TextBox.InputBindings>
                     <KeyBinding Key="Return" Command="{Binding AddressBar.SubmitCommand}" />
-                </TextBox.InputBindings>
-            </TextBox>
+                </ui:TextBox.InputBindings>
+            </ui:TextBox>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal">
                 <ui:Button Margin="8,0,0,0"
@@ -145,6 +152,8 @@
                 <ListBox x:Name="FavoritesList"
                          Grid.Row="1"
                          AllowDrop="True"
+                         Background="Transparent"
+                         BorderThickness="0"
                          ItemsSource="{Binding Favorites.Items}"
                          SelectionChanged="OnFavoriteSelectionChanged"
                          DragOver="OnFavoritesDragOver"
@@ -187,6 +196,8 @@
 
                 <ListBox x:Name="DriveList"
                          Grid.Row="3"
+                         Background="Transparent"
+                         BorderThickness="0"
                          ItemsSource="{Binding DriveSidebar.Drives}"
                          SelectionChanged="OnDriveSelectionChanged">
                     <ListBox.ItemTemplate>

@@ -8,6 +8,7 @@
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewmodels:SettingsViewModel}"
                  Title="환경설정"
+                 Icon="pack://application:,,,/Assets/app.ico"
                  Width="560"
                  Height="640"
                  FontFamily="{StaticResource AppFontFamily}"

@@ -89,6 +89,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var updated = _settings.Update(s => s with { Theme = next });
         _themeService.Apply(updated.Theme);
         CurrentTheme = updated.Theme;
+
+        // 색 지정이 없는 항목의 기본 글자색은 변환 시점의 테마 색으로 굳으므로, 테마가 바뀌면
+        // 양쪽 페인을 새로고침해 새 테마 색으로 다시 계산되게 한다.
+        Workspace.LeftPane.FileList.RefreshCommand.Execute(null);
+        Workspace.RightPane.FileList.RefreshCommand.Execute(null);
     }
 
     /// <summary>설정 창에서 테마가 바뀐 뒤 툴바 토글 상태(툴팁)를 동기화한다.</summary>

@@ -24,6 +24,8 @@
             <ListBox x:Name="TabStrip"
                      Grid.Column="0"
                      AllowDrop="True"
+                     Background="Transparent"
+                     BorderThickness="0"
                      ItemsSource="{Binding Tabs}"
                      SelectedItem="{Binding ActiveTab}"
                      ScrollViewer.HorizontalScrollBarVisibility="Auto"

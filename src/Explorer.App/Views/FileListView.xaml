@@ -29,9 +29,28 @@
         </ContextMenu>
     </UserControl.Resources>
     <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 빠른 필터 (Ctrl+F로 포커스, Esc로 해제) -->
+        <ui:TextBox x:Name="FilterBox"
+                    Grid.Row="0"
+                    Margin="0,0,0,4"
+                    FontSize="12"
+                    ClearButtonEnabled="True"
+                    PlaceholderText="빠른 필터 (Ctrl+F) — 이름으로 거르기"
+                    KeyDown="OnFilterBoxKeyDown"
+                    Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+
         <ListView x:Name="FileList"
+                  Grid.Row="1"
                   AllowDrop="True"
                   FontSize="12"
+                  Background="{DynamicResource ApplicationBackgroundBrush}"
+                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                  BorderThickness="0"
                   ItemsSource="{Binding Items}"
                   SelectedItem="{Binding SelectedItem}"
                   SelectionMode="Extended"
@@ -56,12 +75,18 @@
                     <Setter Property="Padding" Value="6,1" />
                     <Setter Property="MinHeight" Value="0" />
                     <Setter Property="Margin" Value="0" />
+                    <!-- 확장자 색이 없는 항목(폴더·dll 등)이 상속받을 기본 글자색 — 다크/라이트 적응.
+                         확장자 색이 있는 항목은 이름 TextBlock이 이 값을 덮어쓴다. -->
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                 </Style>
             </ListView.ItemContainerStyle>
             <ListView.Resources>
                 <Style TargetType="GridViewColumnHeader">
                     <Setter Property="Padding" Value="8,3" />
                     <Setter Property="HorizontalContentAlignment" Value="Left" />
+                    <Setter Property="Background" Value="{DynamicResource ApplicationBackgroundBrush}" />
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource ControlElevationBorderBrush}" />
                 </Style>
             </ListView.Resources>
             <ListView.InputBindings>
@@ -144,7 +169,8 @@
         </ListView>
 
         <!-- 로딩 오버레이 -->
-        <Border Background="Transparent"
+        <Border Grid.Row="1"
+                Background="Transparent"
                 Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
             <ui:ProgressRing IsIndeterminate="True"
                              Width="48"
@@ -155,6 +181,7 @@
 
         <!-- 빈 폴더/오류 상태 -->
         <TextBlock x:Name="StatusText"
+                   Grid.Row="1"
                    HorizontalAlignment="Center"
                    VerticalAlignment="Center"
                    FontSize="14"

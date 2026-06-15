@@ -78,11 +78,33 @@ public sealed class TrayService : IDisposable
         _trayIcon = new TaskbarIcon
         {
             ToolTipText = "Folder Spot",
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = LoadAppIcon(),
             ContextMenu = menu,
         };
         _trayIcon.TrayLeftMouseUp += (_, _) => showMainWindow();
         _trayIcon.TrayMouseDoubleClick += (_, _) => showMainWindow();
+    }
+
+    /// <summary>번들된 app.ico에서 트레이 아이콘을 로드한다(실패 시 시스템 기본).</summary>
+    private static System.Drawing.Icon LoadAppIcon()
+    {
+        try
+        {
+            var resource = System.Windows.Application.GetResourceStream(
+                new System.Uri("pack://application:,,,/Assets/app.ico"));
+            if (resource?.Stream is { } stream)
+            {
+                using (stream)
+                {
+                    return new System.Drawing.Icon(stream, new System.Drawing.Size(16, 16));
+                }
+            }
+        }
+        catch (System.Exception ex) when (ex is System.IO.IOException or System.ArgumentException)
+        {
+        }
+
+        return System.Drawing.SystemIcons.Application;
     }
 
     public void Dispose()

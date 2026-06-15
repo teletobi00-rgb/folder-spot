@@ -41,11 +41,18 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
     private readonly SynchronizationContext? _uiContext;
     private CancellationTokenSource? _loadCts;
 
+    /// <summary>필터 전 전체 목록 — Items는 이 목록을 FilterText로 거른 부분집합이다.</summary>
+    private IReadOnlyList<FileItemViewModel> _allItems = [];
+
     [ObservableProperty]
     private string? _currentPath;
 
     [ObservableProperty]
     private IReadOnlyList<FileItemViewModel> _items = [];
+
+    /// <summary>현재 폴더 빠른 필터(이름 부분일치, 대소문자 무시). 비우면 전체 표시.</summary>
+    [ObservableProperty]
+    private string _filterText = string.Empty;
 
     [ObservableProperty]
     private FileItemViewModel? _selectedItem;
@@ -212,24 +219,44 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
     {
         Sort = Sort.Toggle(column);
 
-        // 재나열 없이 기존 항목(로드된 아이콘 포함)을 그대로 재정렬한다.
-        var current = Items;
+        // 재나열 없이 기존 항목(로드된 아이콘 포함)을 그대로 재정렬한다. 필터 전 전체 목록을 정렬하고
+        // 필터를 다시 적용한다.
+        var current = _allItems;
         var comparer = FileEntryComparers.Create(Sort);
         var sorted = await Task.Run(() =>
         {
             var list = current.ToList();
             list.Sort((a, b) => comparer.Compare(a.Entry, b.Entry));
-            return list;
+            return (IReadOnlyList<FileItemViewModel>)list;
         }).ConfigureAwait(true);
 
-        Items = sorted;
+        _allItems = sorted;
+        ApplyFilter();
     }
 
     partial void OnCurrentPathChanged(string? value)
     {
+        // 폴더를 옮기면 필터를 초기화한다(각 폴더는 필터 없이 시작).
+        FilterText = string.Empty;
         if (value is not null)
         {
             _folderWatcher.Watch(value);
+        }
+    }
+
+    partial void OnFilterTextChanged(string value) => ApplyFilter();
+
+    /// <summary>_allItems를 FilterText(이름 부분일치)로 걸러 Items에 반영한다.</summary>
+    private void ApplyFilter()
+    {
+        Items = string.IsNullOrWhiteSpace(FilterText)
+            ? _allItems
+            : [.. _allItems.Where(i => i.Name.Contains(FilterText, StringComparison.OrdinalIgnoreCase))];
+
+        // 필터로 선택 항목이 사라지면 선택 해제.
+        if (SelectedItem is not null && !Items.Contains(SelectedItem))
+        {
+            SelectedItem = null;
         }
     }
 
@@ -315,10 +342,11 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
                 ct).ConfigureAwait(true);
             ct.ThrowIfCancellationRequested();
 
-            Items = items;
+            _allItems = items;
             SelectedItem = keepSelectedPath is null
                 ? null
                 : items.FirstOrDefault(i => string.Equals(i.Entry.FullPath, keepSelectedPath, StringComparison.OrdinalIgnoreCase));
+            ApplyFilter();
             Status = items.Length == 0 ? FileListStatus.Empty : FileListStatus.None;
         }
         catch (OperationCanceledException)
@@ -327,17 +355,20 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
         }
         catch (DirectoryNotFoundException)
         {
+            _allItems = [];
             Items = [];
             Status = FileListStatus.NotFound;
         }
         catch (UnauthorizedAccessException)
         {
+            _allItems = [];
             Items = [];
             Status = FileListStatus.AccessDenied;
         }
         catch (Exception ex) when (ex is IOException or ArgumentException)
         {
             _logger.LogError(ex, "폴더 로드 실패: {Path}", path);
+            _allItems = [];
             Items = [];
             Status = FileListStatus.Error;
             StatusMessage = ex.Message;

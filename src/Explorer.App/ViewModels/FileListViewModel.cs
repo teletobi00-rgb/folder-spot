@@ -55,6 +55,7 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
     private string _filterText = string.Empty;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ExtractSelectionCommand))]
     private FileItemViewModel? _selectedItem;
 
     [ObservableProperty]
@@ -258,6 +259,73 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
         }
 
         StatusMessage = null;
+    }
+
+    /// <summary>현재 폴더에서 터미널(Windows Terminal/PowerShell/cmd)을 연다.</summary>
+    [RelayCommand]
+    private void OpenTerminalHere()
+    {
+        if (CurrentPath is { } path)
+        {
+            Explorer.App.Services.TerminalLauncher.OpenAt(path);
+        }
+    }
+
+    /// <summary>선택 항목을 ZIP으로 압축해 현재 폴더에 만든다.</summary>
+    [RelayCommand]
+    private async Task CompressSelectionAsync()
+    {
+        IReadOnlyList<FileItemViewModel> items = SelectedItems;
+        if (items.Count == 0 && SelectedItem is { } single)
+        {
+            items = [single];
+        }
+
+        if (items.Count == 0 || CurrentPath is not { } dir)
+        {
+            return;
+        }
+
+        var paths = items.Select(i => i.Entry.FullPath).ToArray();
+        try
+        {
+            StatusMessage = $"{paths.Length}개 항목 압축 중…";
+            var zip = await Explorer.App.Services.ArchiveService.CreateZipAsync(paths, dir).ConfigureAwait(true);
+            StatusMessage = $"압축 완료: {Path.GetFileName(zip)}";
+            RefreshCommand.Execute(null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or InvalidOperationException)
+        {
+            _logger.LogWarning(ex, "압축 실패");
+            StatusMessage = $"압축 실패: {ex.Message}";
+        }
+    }
+
+    private bool CanExtractSelection() =>
+        SelectedItem is { IsDirectory: false } item && Explorer.App.Services.ArchiveService.IsArchive(item.Entry.FullPath);
+
+    /// <summary>선택한 아카이브(zip/7z/rar/tar 등)를 같은 폴더의 하위 폴더로 푼다.</summary>
+    [RelayCommand(CanExecute = nameof(CanExtractSelection))]
+    private async Task ExtractSelectionAsync()
+    {
+        if (SelectedItem is not { IsDirectory: false } item)
+        {
+            return;
+        }
+
+        try
+        {
+            StatusMessage = "압축 푸는 중…";
+            var dir = await Explorer.App.Services.ArchiveService.ExtractAsync(item.Entry.FullPath).ConfigureAwait(true);
+            StatusMessage = $"압축 풀기 완료: {Path.GetFileName(dir)}";
+            RefreshCommand.Execute(null);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException
+            or InvalidOperationException or SharpCompress.Common.ExtractionException)
+        {
+            _logger.LogWarning(ex, "압축 풀기 실패");
+            StatusMessage = $"압축 풀기 실패: {ex.Message}";
+        }
     }
 
     partial void OnCurrentPathChanged(string? value)

@@ -26,6 +26,9 @@
             <MenuItem Command="{Binding CalculateFolderSizeCommand}" Header="폴더 크기 계산" />
             <MenuItem Command="{Binding AddSelectionToFavoritesCommand}" Header="즐겨찾기에 추가" />
             <Separator />
+            <MenuItem Command="{Binding CompressSelectionCommand}" Header="압축 (ZIP)" />
+            <MenuItem Command="{Binding ExtractSelectionCommand}" Header="압축 풀기" />
+            <Separator />
             <MenuItem Click="OnShowNativeMenuClick" Header="Windows 메뉴 표시 (불안정 ⚠)" />
             <MenuItem Click="OnShowPropertiesClick" Header="속성" />
         </ContextMenu>
@@ -112,6 +115,7 @@
                     <MenuItem Command="{Binding CreateFolderCommand}"
                               Header="새 폴더"
                               InputGestureText="F7" />
+                    <MenuItem Command="{Binding OpenTerminalHereCommand}" Header="여기서 터미널 열기" />
                     <Separator />
                     <MenuItem Command="{Binding RefreshCommand}"
                               Header="새로 고침"

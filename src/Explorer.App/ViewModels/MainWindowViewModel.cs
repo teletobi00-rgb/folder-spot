@@ -82,17 +82,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ToggleTheme()
     {
-        var next = CurrentTheme switch
-        {
-            AppTheme.System => AppTheme.Light,
-            AppTheme.Light => AppTheme.Dark,
-            _ => AppTheme.System,
-        };
-
+        // 다크 ↔ 라이트 2상태 토글. System은 순환에서 제외한다 — OS가 다크면 System이 다크처럼 보여
+        // "한 번 더 클릭해야 바뀌는" 헛클릭이 생기기 때문(System은 설정 창에서 명시 선택).
+        // 기준을 settings.Current로 두어 설정 창에서의 테마 변경과도 항상 동기화된다.
+        var next = _settings.Current.Theme == AppTheme.Dark ? AppTheme.Light : AppTheme.Dark;
         var updated = _settings.Update(s => s with { Theme = next });
         _themeService.Apply(updated.Theme);
         CurrentTheme = updated.Theme;
     }
+
+    /// <summary>설정 창에서 테마가 바뀐 뒤 툴바 토글 상태(툴팁)를 동기화한다.</summary>
+    public void SyncThemeFromSettings() => CurrentTheme = _settings.Current.Theme;
 
     private void OnWorkspacePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {

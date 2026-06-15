@@ -37,22 +37,31 @@
                         <StackPanel Orientation="Horizontal" />
                     </ItemsPanelTemplate>
                 </ListBox.ItemsPanel>
+                <ListBox.ItemContainerStyle>
+                    <!-- 탭 폭/높이 축소: 테마 템플릿 유지하고 패딩만 줄인다(BasedOn 없이 세터만). -->
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="8,3" />
+                        <Setter Property="Margin" Value="0" />
+                        <Setter Property="MinHeight" Value="0" />
+                    </Style>
+                </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <StackPanel Orientation="Horizontal" ToolTip="{Binding Path}">
-                            <TextBlock MaxWidth="140"
+                            <TextBlock MaxWidth="88"
                                        VerticalAlignment="Center"
+                                       FontSize="12"
                                        Text="{Binding Title}"
                                        TextTrimming="CharacterEllipsis" />
-                            <Button Margin="6,0,0,0"
-                                    Padding="4,0"
+                            <Button Margin="4,0,0,0"
+                                    Padding="3,0"
                                     VerticalAlignment="Center"
                                     Background="Transparent"
                                     BorderThickness="0"
                                     Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                     CommandParameter="{Binding}"
                                     Content="✕"
-                                    FontSize="10"
+                                    FontSize="9"
                                     ToolTip="탭 닫기 (Ctrl+W)" />
                         </StackPanel>
                     </DataTemplate>

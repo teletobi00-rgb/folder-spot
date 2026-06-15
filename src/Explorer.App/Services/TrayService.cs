@@ -77,7 +77,7 @@ public sealed class TrayService : IDisposable
 
         _trayIcon = new TaskbarIcon
         {
-            ToolTipText = "Explorer 파일 탐색기",
+            ToolTipText = "Folder Spot",
             Icon = System.Drawing.SystemIcons.Application,
             ContextMenu = menu,
         };

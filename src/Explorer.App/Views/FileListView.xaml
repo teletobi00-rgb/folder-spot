@@ -103,6 +103,7 @@
                                            VerticalAlignment="Center"
                                            Source="{Binding Icon}" />
                                     <TextBlock VerticalAlignment="Center"
+                                               Foreground="{Binding Extension, Converter={StaticResource ExtensionColorConverter}}"
                                                Text="{Binding Name}"
                                                TextTrimming="CharacterEllipsis"
                                                Visibility="{Binding IsRenaming, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />

@@ -8,7 +8,7 @@
                  xmlns:views="clr-namespace:Explorer.App.Views"
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewmodels:MainWindowViewModel}"
-                 Title="Explorer"
+                 Title="Folder Spot"
                  Width="1280"
                  Height="760"
                  WindowStartupLocation="CenterScreen"
@@ -17,17 +17,55 @@
                  FontSize="13"
                  WindowBackdropType="Mica"
                  WindowCornerPreference="Round">
+    <ui:FluentWindow.Resources>
+        <!-- 하단 단축키 기능 바 버튼 (TC 스타일) — DynamicResource로 다크/라이트 테마에 적응 -->
+        <Style x:Key="FnKeyButton" TargetType="Button">
+            <Setter Property="Margin" Value="2,0" />
+            <Setter Property="Padding" Value="6,3" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Padding="{TemplateBinding Padding}"
+                                Background="Transparent"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.4" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </ui:FluentWindow.Resources>
     <!-- 키 바인딩은 중앙 키맵(keymap.json 오버라이드 가능)에서 코드비하인드가 구성한다 -->
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <!-- 1 툴바 -->
             <RowDefinition Height="Auto" />
+            <!-- 2 본문 -->
             <RowDefinition Height="*" />
+            <!-- 3 작업 큐 -->
             <RowDefinition Height="Auto" />
+            <!-- 4 단축키 바 -->
+            <RowDefinition Height="Auto" />
+            <!-- 5 상태바 -->
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" Title="Explorer" />
+        <ui:TitleBar Grid.Row="0" Title="Folder Spot" />
 
         <!-- 툴바: 네비게이션 + 주소창 + 분할/테마 -->
         <Grid Grid.Row="1" Margin="8,4">
@@ -74,6 +112,10 @@
                            Command="{Binding ToggleThemeCommand}"
                            Content="테마"
                            ToolTip="{Binding CurrentTheme}" />
+                <ui:Button Margin="4,0,0,0"
+                           Click="OnSettingsClick"
+                           Content="⚙ 설정"
+                           ToolTip="환경설정" />
             </StackPanel>
         </Grid>
 
@@ -292,8 +334,44 @@
             </Grid>
         </Border>
 
+        <!-- 단축키 기능 바 (Total Commander 스타일) — 클릭 가능, 활성 페인 대상 -->
+        <UniformGrid Grid.Row="4"
+                     Margin="8,4,8,0"
+                     Rows="1">
+            <Button Style="{StaticResource FnKeyButton}"
+                    Command="{Binding Workspace.ActiveFileList.BeginRenameCommand}"
+                    ToolTip="선택 항목 이름 변경">
+                <TextBlock><Run FontWeight="Bold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Text="F2" /><Run Text="  이름변경" /></TextBlock>
+            </Button>
+            <Button Style="{StaticResource FnKeyButton}"
+                    Command="{Binding Workspace.CopyToOtherPaneCommand}"
+                    ToolTip="반대 페인으로 복사">
+                <TextBlock><Run FontWeight="Bold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Text="F5" /><Run Text="  복사" /></TextBlock>
+            </Button>
+            <Button Style="{StaticResource FnKeyButton}"
+                    Command="{Binding Workspace.MoveToOtherPaneCommand}"
+                    ToolTip="반대 페인으로 이동">
+                <TextBlock><Run FontWeight="Bold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Text="F6" /><Run Text="  이동" /></TextBlock>
+            </Button>
+            <Button Style="{StaticResource FnKeyButton}"
+                    Command="{Binding Workspace.ActiveFileList.CreateFolderCommand}"
+                    ToolTip="새 폴더 만들기">
+                <TextBlock><Run FontWeight="Bold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Text="F7" /><Run Text="  새폴더" /></TextBlock>
+            </Button>
+            <Button Style="{StaticResource FnKeyButton}"
+                    Command="{Binding Workspace.ActiveFileList.DeleteSelectionCommand}"
+                    ToolTip="휴지통으로 삭제">
+                <TextBlock><Run FontWeight="Bold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Text="Del" /><Run Text="  삭제" /></TextBlock>
+            </Button>
+            <Button Style="{StaticResource FnKeyButton}"
+                    Command="{Binding Workspace.ToggleQuickViewCommand}"
+                    ToolTip="반대 페인 미리보기 토글">
+                <TextBlock><Run FontWeight="Bold" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Text="Ctrl+Q" /><Run Text="  미리보기" /></TextBlock>
+            </Button>
+        </UniformGrid>
+
         <!-- 상태바 -->
-        <Grid Grid.Row="4" Margin="12,4,12,6">
+        <Grid Grid.Row="5" Margin="12,4,12,6">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />

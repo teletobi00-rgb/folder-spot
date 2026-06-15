@@ -18,6 +18,8 @@
             <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter" />
             <converters:PreviewKindToVisibilityConverter x:Key="PreviewKindToVisibilityConverter" />
             <converters:FileSizeConverter x:Key="FileSizeConverter" />
+            <converters:ExtensionColorConverter x:Key="ExtensionColorConverter" />
+            <converters:HexToBrushConverter x:Key="HexToBrushConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

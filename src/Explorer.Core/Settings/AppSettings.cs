@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Explorer.Core.Workspace;
 
 namespace Explorer.Core.Settings;
@@ -21,4 +22,7 @@ public sealed record AppSettings
 
     /// <summary>마지막 세션의 탭/페인 구성 (최초 실행이면 null).</summary>
     public WorkspaceSession? Session { get; init; }
+
+    /// <summary>확장자별 파일명 글자색(점 없는 소문자 → #RRGGBB). 기본 프리셋이 채워져 있다.</summary>
+    public ImmutableDictionary<string, string> ExtensionColors { get; init; } = ExtensionColorDefaults.Map;
 }

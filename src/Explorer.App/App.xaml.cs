@@ -85,6 +85,7 @@ public partial class App : Application
             AppPaths.SettingsFile,
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<JsonSettingsService>>()));
         services.AddSingleton<IThemeService, WpfUiThemeService>();
+        services.AddSingleton<ExtensionColorMap>();
 
         services.AddSingleton<IFileSystemEnumerator, FileSystemEnumerator>();
         services.AddSingleton<IDriveProvider, DriveInfoDriveProvider>();
@@ -155,6 +156,8 @@ public partial class App : Application
         services.AddSingleton<OperationQueueViewModel>();
         services.AddSingleton<MainWindowViewModel>();
         services.AddSingleton<MainWindow>();
+        services.AddTransient<SettingsViewModel>();
+        services.AddTransient<SettingsWindow>();
 
         // 전역 검색: Alt+Space 핫키 → 팝업 → 인덱스 질의 (+MRU 가중)
         services.AddSingleton<ISearchUsageStore>(provider => new JsonSearchUsageStore(

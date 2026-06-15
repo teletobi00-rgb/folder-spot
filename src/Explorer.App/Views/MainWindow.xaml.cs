@@ -8,6 +8,7 @@ using Explorer.App.Services;
 using Explorer.App.ViewModels;
 using Explorer.Core.Input;
 using Explorer.Core.Workspace;
+using Microsoft.Extensions.DependencyInjection;
 using Wpf.Ui.Controls;
 
 namespace Explorer.App.Views;
@@ -185,6 +186,21 @@ public partial class MainWindow : FluentWindow
     private void OnCrossPaneTabDrop(object? sender, CrossPaneTabDropEventArgs e)
     {
         _ = _viewModel.Workspace.MoveTabToOtherPaneAsync(e.SourcePane, e.Tab, e.InsertIndex);
+    }
+
+    private void OnSettingsClick(object sender, RoutedEventArgs e)
+    {
+        var window = App.Services.GetRequiredService<SettingsWindow>();
+        window.Owner = this;
+        window.ShowDialog();
+
+        if (window.Saved)
+        {
+            // 툴바 테마 토글 상태를 설정 창 변경과 동기화하고, 색상 즉시 반영을 위해 양쪽 페인 새로고침.
+            _viewModel.SyncThemeFromSettings();
+            _viewModel.Workspace.LeftPane.FileList.RefreshCommand.Execute(null);
+            _viewModel.Workspace.RightPane.FileList.RefreshCommand.Execute(null);
+        }
     }
 
     private void OnDriveSelectionChanged(object sender, SelectionChangedEventArgs e)

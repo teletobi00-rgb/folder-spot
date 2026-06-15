@@ -23,6 +23,8 @@ public sealed partial class FileItemViewModel : ObservableObject
     private ImageSource? _thumbnail;
     private bool _thumbnailRequested;
     private const int ThumbnailLoadSize = 256;
+    private bool _isProtected;
+    private bool _protectionChecked;
 
     /// <summary>잘라내기 표시 상태 (시각적 흐림 처리용).</summary>
     [ObservableProperty]
@@ -112,6 +114,37 @@ public sealed partial class FileItemViewModel : ObservableObject
             }
 
             return _thumbnail ?? Icon;
+        }
+    }
+
+    /// <summary>AIP/암호화로 보호된 Office 파일이면 true(첫 접근 시 지연 검사 — OOXML만 파일을 연다).</summary>
+    public bool IsProtected
+    {
+        get
+        {
+            if (!_protectionChecked)
+            {
+                _protectionChecked = true;
+                if (!Entry.IsDirectory && Explorer.App.Services.FileProtectionDetector.MaybeProtectable(Entry.Extension))
+                {
+                    _ = CheckProtectionAsync();
+                }
+            }
+
+            return _isProtected;
+        }
+    }
+
+    private async Task CheckProtectionAsync()
+    {
+        var path = Entry.FullPath;
+        var extension = Entry.Extension;
+        var result = await Task.Run(() => Explorer.App.Services.FileProtectionDetector.IsProtected(path, extension))
+            .ConfigureAwait(true);
+        if (result)
+        {
+            _isProtected = true;
+            OnPropertyChanged(nameof(IsProtected));
         }
     }
 

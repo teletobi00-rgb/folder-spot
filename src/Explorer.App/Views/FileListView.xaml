@@ -173,6 +173,12 @@
                                            Margin="0,0,6,0"
                                            VerticalAlignment="Center"
                                            Source="{Binding Icon}" />
+                                    <TextBlock Margin="0,0,4,0"
+                                               VerticalAlignment="Center"
+                                               FontSize="11"
+                                               Text="🔒"
+                                               ToolTip="보호된 파일 (암호화/AIP)"
+                                               Visibility="{Binding IsProtected, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                     <TextBlock VerticalAlignment="Center"
                                                Foreground="{Binding Extension, Converter={StaticResource ExtensionColorConverter}}"
                                                Text="{Binding Name}"

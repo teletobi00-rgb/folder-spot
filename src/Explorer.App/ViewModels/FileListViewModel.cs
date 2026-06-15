@@ -234,6 +234,32 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
         ApplyFilter();
     }
 
+    /// <summary>선택한 폴더(들)의 전체 크기를 계산해 크기 칸에 표시한다.</summary>
+    [RelayCommand]
+    private async Task CalculateFolderSizeAsync()
+    {
+        var folders = SelectedItems.Where(i => i.IsDirectory).ToArray();
+        if (folders.Length == 0 && SelectedItem is { IsDirectory: true } single)
+        {
+            folders = [single];
+        }
+
+        if (folders.Length == 0)
+        {
+            return;
+        }
+
+        StatusMessage = $"{folders.Length}개 폴더 크기 계산 중…";
+        foreach (var folder in folders)
+        {
+            var path = folder.Entry.FullPath;
+            var size = await Task.Run(() => DirectorySizeCalculator.Compute(path)).ConfigureAwait(true);
+            folder.SetComputedFolderSize(size);
+        }
+
+        StatusMessage = null;
+    }
+
     partial void OnCurrentPathChanged(string? value)
     {
         // 폴더를 옮기면 필터를 초기화한다(각 폴더는 필터 없이 시작).

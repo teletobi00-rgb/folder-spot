@@ -14,6 +14,7 @@ public sealed partial class FileItemViewModel : ObservableObject
 {
     private readonly IShellIconProvider _iconProvider;
     private string? _sizeText;
+    private long? _computedFolderSize;
     private string? _dateModifiedText;
     private string? _attributesText;
     private ImageSource? _icon;
@@ -50,7 +51,26 @@ public sealed partial class FileItemViewModel : ObservableObject
 
     public double NameOpacity => IsCut ? 0.5 : 1.0;
 
-    public string SizeText => _sizeText ??= Entry.IsDirectory ? string.Empty : FileSizeFormatter.Format(Entry.Size);
+    /// <summary>파일은 항상 크기, 폴더는 "크기 계산" 후에만 합산 크기를 보여준다(그 전엔 빈칸).</summary>
+    public string SizeText
+    {
+        get
+        {
+            if (Entry.IsDirectory)
+            {
+                return _computedFolderSize is { } size ? FileSizeFormatter.Format(size) : string.Empty;
+            }
+
+            return _sizeText ??= FileSizeFormatter.Format(Entry.Size);
+        }
+    }
+
+    /// <summary>폴더 크기 계산 결과를 반영한다(UI 스레드에서 호출).</summary>
+    public void SetComputedFolderSize(long bytes)
+    {
+        _computedFolderSize = bytes;
+        OnPropertyChanged(nameof(SizeText));
+    }
 
     public string DateModifiedText => _dateModifiedText ??=
         Entry.DateModified.ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture);

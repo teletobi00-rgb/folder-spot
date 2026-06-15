@@ -158,6 +158,8 @@ public partial class App : Application
         services.AddSingleton<MainWindow>();
         services.AddTransient<SettingsViewModel>();
         services.AddTransient<SettingsWindow>();
+        services.AddTransient<BatchRenameViewModel>();
+        services.AddTransient<BatchRenameWindow>();
 
         // 전역 검색: Alt+Space 핫키 → 팝업 → 인덱스 질의 (+MRU 가중)
         services.AddSingleton<ISearchUsageStore>(provider => new JsonSearchUsageStore(

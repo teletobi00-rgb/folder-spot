@@ -117,6 +117,35 @@ public partial class FileListView : UserControl
         }
     }
 
+    private void OnBatchRenameClick(object sender, RoutedEventArgs e)
+    {
+        if (ViewModel is null)
+        {
+            return;
+        }
+
+        var targets = ViewModel.SelectedItems;
+        if (targets.Count == 0 && ViewModel.SelectedItem is { } single)
+        {
+            targets = [single];
+        }
+
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        var window = App.Services.GetRequiredService<BatchRenameWindow>();
+        window.Owner = Window.GetWindow(this);
+        window.SetTargets(targets);
+        window.ShowDialog();
+
+        if (window.Applied)
+        {
+            ViewModel.RefreshCommand.Execute(null);
+        }
+    }
+
     private void OnColumnHeaderClick(object sender, RoutedEventArgs e)
     {
         if (e.OriginalSource is not GridViewColumnHeader { Column: { } column } || ViewModel is null)

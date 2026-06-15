@@ -13,6 +13,8 @@
                  Height="760"
                  WindowStartupLocation="CenterScreen"
                  ExtendsContentIntoTitleBar="True"
+                 FontFamily="{StaticResource AppFontFamily}"
+                 FontSize="13"
                  WindowBackdropType="Mica"
                  WindowCornerPreference="Round">
     <!-- 키 바인딩은 중앙 키맵(keymap.json 오버라이드 가능)에서 코드비하인드가 구성한다 -->

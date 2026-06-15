@@ -132,6 +132,10 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                <!-- 네이티브(실제 OLE) 미리보기 — 코드비하인드가 PreviewHandlerHost(HwndHost)를 Child로 넣는다 -->
+                <Border x:Name="NativeHost"
+                        Visibility="{Binding Kind, Converter={StaticResource PreviewKindToVisibilityConverter}, ConverterParameter=Native}" />
+
                 <!-- 오류 -->
                 <TextBlock Margin="16"
                            HorizontalAlignment="Center"

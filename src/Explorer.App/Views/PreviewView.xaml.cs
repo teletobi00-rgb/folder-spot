@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using Explorer.App.ViewModels;
+using Explorer.App.Views.Controls;
 using Explorer.Preview;
 using ICSharpCode.AvalonEdit.Highlighting;
 
@@ -9,10 +10,20 @@ namespace Explorer.App.Views;
 
 public partial class PreviewView : UserControl
 {
+    private PreviewHandlerHost? _nativeHost;
+
     public PreviewView()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+
+        // 트리에서 제거되면 네이티브 미리보기 호스트(COM 핸들러/HWND/prevhost.exe)를 즉시 정리한다.
+        // GC 파이널라이저에 맡기면 대리 프로세스가 늦게까지 살아있는다. 재표시되면 ApplyResult가 재생성.
+        Unloaded += (_, _) =>
+        {
+            _nativeHost?.Dispose();
+            _nativeHost = null;
+        };
     }
 
     private PreviewViewModel? ViewModel => DataContext as PreviewViewModel;
@@ -64,6 +75,21 @@ public partial class PreviewView : UserControl
         {
             MediaView.Stop();
             MediaView.Source = null;
+        }
+
+        if (vm.Kind == PreviewKind.Native)
+        {
+            _nativeHost ??= new PreviewHandlerHost();
+            if (!ReferenceEquals(NativeHost.Child, _nativeHost))
+            {
+                NativeHost.Child = _nativeHost;
+            }
+
+            _nativeHost.FilePath = vm.Result.FilePath;
+        }
+        else if (_nativeHost is not null)
+        {
+            _nativeHost.FilePath = null; // 핸들러 언로드 (HWND는 재사용)
         }
     }
 

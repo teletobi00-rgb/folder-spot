@@ -5,6 +5,7 @@ using System.Windows.Interop;
 using Explorer.App.Input;
 using Explorer.App.Services;
 using Explorer.App.Services.Operations;
+using Explorer.App.Services.Preview;
 using Explorer.App.ViewModels;
 using Explorer.App.Views;
 using Explorer.Core;
@@ -37,6 +38,11 @@ namespace Explorer.App;
 public partial class App : Application
 {
     private readonly IHost _host;
+
+    /// <summary>메인 윈도우 HWND를 UI 스레드에서 1회 캡처해 둔다 — 파일 작업은 전용 STA 워커 스레드에서
+    /// 도는데 거기서 Application.MainWindow(DispatcherObject)에 접근하면 크로스 스레드 예외가 난다.
+    /// 핸들 자체는 스레드 무관(IntPtr)하므로 이것만 공유한다.</summary>
+    private static IntPtr _mainWindowHandle;
 
     /// <summary>View 계층의 글루 코드용 서비스 접근점 (ViewModel은 생성자 주입을 쓴다).</summary>
     public static IServiceProvider Services => ((App)Current)._host.Services;
@@ -85,7 +91,7 @@ public partial class App : Application
         services.AddSingleton<IFileLauncher, ShellFileLauncher>();
         services.AddSingleton<IShellIconProvider, ShellIconProvider>();
         services.AddSingleton<IFileOperationService>(provider => new ShellFileOperationService(
-            () => Current?.MainWindow is { } window ? new WindowInteropHelper(window).Handle : 0,
+            () => System.Threading.Volatile.Read(ref _mainWindowHandle),
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ShellFileOperationService>>()));
         services.AddSingleton<IFileClipboardService, WpfFileClipboardService>();
         services.AddSingleton<IShellContextMenuService, ShellContextMenuService>();
@@ -118,7 +124,12 @@ public partial class App : Application
         services.AddSingleton<IPreviewRenderer, TextPreviewRenderer>();
         services.AddSingleton<IPreviewRenderer, MediaPreviewRenderer>();
         services.AddSingleton<IPreviewRenderer, ArchivePreviewRenderer>();
-        services.AddSingleton<IPreviewRenderer, InfoPreviewRenderer>();
+        // Office/PDF 등 등록된 IPreviewHandler가 있는 형식 → 실제 OLE 미리보기(Info 폴백보다 우선).
+        services.AddSingleton<IPreviewRenderer, ShellPreviewRenderer>();
+        // InfoPreviewRenderer는 (1) 마지막 폴백이자 (2) ShellPreviewRenderer가 네트워크 경로에 위임하는 대상.
+        // 같은 인스턴스를 양쪽에서 쓰도록 concrete로도 등록한다.
+        services.AddSingleton<InfoPreviewRenderer>();
+        services.AddSingleton<IPreviewRenderer>(sp => sp.GetRequiredService<InfoPreviewRenderer>());
         services.AddSingleton<IPreviewRendererRegistry, PreviewRendererRegistry>();
         services.AddSingleton<QuickPreviewWindow>();
 
@@ -197,6 +208,9 @@ public partial class App : Application
         var window = _host.Services.GetRequiredService<MainWindow>();
         Log.Information("MainWindow 인스턴스 생성 완료");
         MainWindow = window;
+        // 파일 작업용 owner HWND를 Show() 이전에 확보·캡처한다 — Show가 메시지를 펌프해 재진입
+        // (트레이/Activated 콜백)으로 파일 작업이 먼저 돌더라도 STA 워커가 유효한 핸들을 읽도록.
+        System.Threading.Volatile.Write(ref _mainWindowHandle, new WindowInteropHelper(window).EnsureHandle());
         window.Show();
 
         // 셸 확장 DLL 선로딩 — 첫 우클릭 메뉴 지연을 줄인다. (진단용 비활성화: EXPLORER_DISABLE_MENU_WARMUP=1)

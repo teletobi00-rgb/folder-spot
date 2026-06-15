@@ -19,6 +19,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 번들 폰트 Pretendard (SIL OFL 1.1): pack URI로 임베드해 시스템 미설치 환경에서도 일관 표시 -->
+    <Resource Include="Assets\Fonts\Pretendard-Regular.otf" />
+    <Resource Include="Assets\Fonts\Pretendard-Medium.otf" />
+    <Resource Include="Assets\Fonts\Pretendard-SemiBold.otf" />
+    <Resource Include="Assets\Fonts\Pretendard-Bold.otf" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Explorer.Core\Explorer.Core.csproj" />
     <ProjectReference Include="..\Explorer.Shell\Explorer.Shell.csproj" />
     <ProjectReference Include="..\Explorer.Indexing\Explorer.Indexing.csproj" />

@@ -68,11 +68,13 @@
         </Grid>
 
         <Grid Grid.Row="1">
+            <!-- DataContext를 자식 VM으로 바꾸면 같은 엘리먼트의 Visibility 바인딩도 자식 VM 기준이 된다.
+                 IsPreviewMode는 PaneViewModel 소유이므로 RelativeSource로 페인 VM을 직접 가리킨다. -->
             <views:FileListView x:Name="FileArea"
                                 DataContext="{Binding FileList}"
-                                Visibility="{Binding IsPreviewMode, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                Visibility="{Binding DataContext.IsPreviewMode, RelativeSource={RelativeSource AncestorType=views:PaneView}, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
             <views:PreviewView DataContext="{Binding Preview}"
-                               Visibility="{Binding IsPreviewMode, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                               Visibility="{Binding DataContext.IsPreviewMode, RelativeSource={RelativeSource AncestorType=views:PaneView}, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </Grid>
     </Grid>
 </UserControl>

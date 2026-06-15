@@ -3,12 +3,13 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  Title="이름 충돌"
+                 FontFamily="{StaticResource AppFontFamily}"
                  Width="460"
                  SizeToContent="Height"
                  ResizeMode="NoResize"
                  WindowStartupLocation="CenterOwner"
                  ShowInTaskbar="False"
-                 WindowBackdropType="Mica">
+                 WindowBackdropType="None">
     <StackPanel Margin="20,12,20,16">
         <TextBlock FontSize="16" FontWeight="SemiBold" Text="같은 이름의 항목이 이미 있습니다" />
         <TextBlock x:Name="NameText"

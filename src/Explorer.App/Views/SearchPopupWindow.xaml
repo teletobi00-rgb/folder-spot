@@ -8,6 +8,7 @@
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewmodels:SearchPopupViewModel}"
                  Title="파일 검색"
+                 FontFamily="{StaticResource AppFontFamily}"
                  Width="600"
                  SizeToContent="Height"
                  MaxHeight="520"

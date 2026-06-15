@@ -77,6 +77,32 @@ public partial class MainWindow : FluentWindow
 
         LeftPaneView.CrossPaneTabDropRequested += OnCrossPaneTabDrop;
         RightPaneView.CrossPaneTabDropRequested += OnCrossPaneTabDrop;
+
+        // 마우스 뒤로/앞으로 버튼(XButton1/2) → 활성 페인 폴더 이동. 터널링이라 자식이 먹어도 잡는다.
+        PreviewMouseDown += OnNavigationMouseButton;
+    }
+
+    /// <summary>마우스 보조 버튼으로 폴더 히스토리 뒤로/앞으로 이동(Alt+←/→와 동일 명령).</summary>
+    private void OnNavigationMouseButton(object sender, MouseButtonEventArgs e)
+    {
+        ICommand? command = e.ChangedButton switch
+        {
+            MouseButton.XButton1 => _viewModel.Workspace.ActiveFileList.GoBackCommand,
+            MouseButton.XButton2 => _viewModel.Workspace.ActiveFileList.GoForwardCommand,
+            _ => null,
+        };
+
+        if (command is null)
+        {
+            return;
+        }
+
+        if (command.CanExecute(null))
+        {
+            command.Execute(null);
+        }
+
+        e.Handled = true;
     }
 
     /// <summary>트레이/검색 팝업에서 메인 창을 다시 띄울 때.</summary>

@@ -31,6 +31,7 @@
     <Grid>
         <ListView x:Name="FileList"
                   AllowDrop="True"
+                  FontSize="12"
                   ItemsSource="{Binding Items}"
                   SelectedItem="{Binding SelectedItem}"
                   SelectionMode="Extended"
@@ -48,6 +49,21 @@
                   DragOver="OnDragOver"
                   Drop="OnDrop"
                   DragLeave="OnDragLeave">
+            <ListView.ItemContainerStyle>
+                <!-- 밀도 ↑: WPF-UI 테마 템플릿은 그대로 두고(세터만 오버라이드) 행 패딩/최소높이만 줄인다.
+                     BasedOn 없이 세터만 지정하면 미지정 속성(Template 등)은 테마 스타일에서 내려온다. -->
+                <Style TargetType="ListViewItem">
+                    <Setter Property="Padding" Value="6,1" />
+                    <Setter Property="MinHeight" Value="0" />
+                    <Setter Property="Margin" Value="0" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.Resources>
+                <Style TargetType="GridViewColumnHeader">
+                    <Setter Property="Padding" Value="8,3" />
+                    <Setter Property="HorizontalContentAlignment" Value="Left" />
+                </Style>
+            </ListView.Resources>
             <ListView.InputBindings>
                 <KeyBinding Key="Return"
                             Command="{Binding OpenItemCommand}"
@@ -81,9 +97,9 @@
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Opacity="{Binding NameOpacity}" Orientation="Horizontal">
-                                    <Image Width="16"
-                                           Height="16"
-                                           Margin="0,0,8,0"
+                                    <Image Width="14"
+                                           Height="14"
+                                           Margin="0,0,6,0"
                                            VerticalAlignment="Center"
                                            Source="{Binding Icon}" />
                                     <TextBlock VerticalAlignment="Center"

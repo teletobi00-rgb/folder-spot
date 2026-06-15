@@ -47,11 +47,11 @@ public sealed class ShellFileOperationService : IFileOperationService, IDisposab
             $"복사 → {destination}",
             (operation, owned) =>
             {
-                var destinationFolder = new ShellFolder(destination);
+                var destinationFolder = new ShellFolder(MappedDrivePathResolver.ToUncIfMappedDrive(destination));
                 owned.Add(destinationFolder);
                 foreach (var source in sourcePaths)
                 {
-                    var item = new ShellItem(source);
+                    var item = new ShellItem(MappedDrivePathResolver.ToUncIfMappedDrive(source));
                     owned.Add(item);
                     operation.QueueCopyOperation(item, destinationFolder);
                 }
@@ -73,11 +73,11 @@ public sealed class ShellFileOperationService : IFileOperationService, IDisposab
             $"이동 → {destination}",
             (operation, owned) =>
             {
-                var destinationFolder = new ShellFolder(destination);
+                var destinationFolder = new ShellFolder(MappedDrivePathResolver.ToUncIfMappedDrive(destination));
                 owned.Add(destinationFolder);
                 foreach (var source in sourcePaths)
                 {
-                    var item = new ShellItem(source);
+                    var item = new ShellItem(MappedDrivePathResolver.ToUncIfMappedDrive(source));
                     owned.Add(item);
                     operation.QueueMoveOperation(item, destinationFolder);
                 }
@@ -100,7 +100,7 @@ public sealed class ShellFileOperationService : IFileOperationService, IDisposab
             {
                 foreach (var path in paths)
                 {
-                    var item = new ShellItem(path);
+                    var item = new ShellItem(MappedDrivePathResolver.ToUncIfMappedDrive(path));
                     owned.Add(item);
                     operation.QueueDeleteOperation(item);
                 }
@@ -116,9 +116,9 @@ public sealed class ShellFileOperationService : IFileOperationService, IDisposab
         var destination = PathUtils.Normalize(destinationDir);
         return RunAsync($"이동 → {destination}", (operation, owned) =>
         {
-            var destinationFolder = new ShellFolder(destination);
+            var destinationFolder = new ShellFolder(MappedDrivePathResolver.ToUncIfMappedDrive(destination));
             owned.Add(destinationFolder);
-            var item = new ShellItem(source);
+            var item = new ShellItem(MappedDrivePathResolver.ToUncIfMappedDrive(source));
             owned.Add(item);
             operation.QueueMoveOperation(item, destinationFolder, newName);
         });
@@ -240,7 +240,11 @@ public sealed class ShellFileOperationService : IFileOperationService, IDisposab
 
     private ShellFileOperations.OperationFlags BuildOptions(bool permanentDelete, FileOperationContext? context)
     {
-        var options = ShellFileOperations.OperationFlags.NoConfirmMkDir;
+        // ShowElevationPrompt(FOFX_SHOWELEVATIONPROMPT): 다른 셸 UI는 억제해도 보호 위치(C:\ 루트,
+        // Program Files 등) 작업에 필요한 UAC 권한 상승 프롬프트만은 띄운다 — 없으면 권한을 못 얻어
+        // 조용히 중단(AnyOperationsAborted)된다.
+        var options = ShellFileOperations.OperationFlags.NoConfirmMkDir
+            | ShellFileOperations.OperationFlags.ShowElevationPrompt;
 
         if (!permanentDelete)
         {

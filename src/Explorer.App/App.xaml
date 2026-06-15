@@ -9,6 +9,9 @@
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
+            <!-- 앱 기본 글꼴: 번들 Pretendard → (미로드 시) 시스템 Noto Sans KR → Segoe UI 순 폴백 -->
+            <FontFamily x:Key="AppFontFamily">pack://application:,,,/Explorer.App;component/Assets/Fonts/#Pretendard, Noto Sans KR, Segoe UI Variable Text, Segoe UI</FontFamily>
+
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
             <converters:ActiveSideToBrushConverter x:Key="ActiveSideToBrushConverter" />

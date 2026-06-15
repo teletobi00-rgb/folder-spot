@@ -9,6 +9,7 @@
                  mc:Ignorable="d"
                  d:DataContext="{d:DesignInstance Type=viewmodels:PreviewViewModel}"
                  Title="빠른 미리보기"
+                 FontFamily="{StaticResource AppFontFamily}"
                  Width="900"
                  Height="640"
                  WindowStartupLocation="CenterScreen"

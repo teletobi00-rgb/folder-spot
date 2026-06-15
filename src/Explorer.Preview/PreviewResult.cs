@@ -12,6 +12,9 @@ public enum PreviewKind
     Archive,
     Info,
     Error,
+
+    /// <summary>OS에 등록된 IPreviewHandler(실제 OLE 미리보기)로 호스팅 — Office/PDF 등. App 뷰가 HWND를 띄운다.</summary>
+    Native,
 }
 
 /// <summary>압축 파일 내 항목 한 줄.</summary>

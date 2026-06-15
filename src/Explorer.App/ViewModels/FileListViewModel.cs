@@ -73,6 +73,14 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private SortDescriptor _sort = SortDescriptor.Default;
 
+    /// <summary>보기 모드(자세히/간단히/썸네일). 설정에서 초기화, 변경은 워크스페이스가 양쪽 페인에 적용.</summary>
+    [ObservableProperty]
+    private FileViewMode _viewMode;
+
+    /// <summary>썸네일 셀 크기(px).</summary>
+    [ObservableProperty]
+    private int _thumbnailSize = 96;
+
     public FileListViewModel(
         IFileSystemEnumerator enumerator,
         IFileLauncher launcher,
@@ -107,6 +115,8 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
         _logger = logger;
         _uiContext = SynchronizationContext.Current;
         _folderWatcher.ChangesDetected += OnExternalFolderChanged;
+        _viewMode = settings.Current.ViewMode;
+        _thumbnailSize = settings.Current.ThumbnailSize;
     }
 
     public NavigationHistory History { get; private set; } = NavigationHistory.Empty;

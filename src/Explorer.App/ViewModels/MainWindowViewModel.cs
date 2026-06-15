@@ -99,6 +99,44 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>설정 창에서 테마가 바뀐 뒤 툴바 토글 상태(툴팁)를 동기화한다.</summary>
     public void SyncThemeFromSettings() => CurrentTheme = _settings.Current.Theme;
 
+    /// <summary>현재 보기 모드(양쪽 페인 동일). 토글 활성 표시에 사용.</summary>
+    public FileViewMode ViewMode => Workspace.LeftPane.FileList.ViewMode;
+
+    public int ThumbnailSize => Workspace.LeftPane.FileList.ThumbnailSize;
+
+    /// <summary>보기 모드(자세히/간단히/썸네일)를 양쪽 페인에 적용하고 저장한다.</summary>
+    [RelayCommand]
+    private void SetViewMode(string? mode)
+    {
+        if (!Enum.TryParse<FileViewMode>(mode, out var viewMode))
+        {
+            return;
+        }
+
+        Workspace.LeftPane.FileList.ViewMode = viewMode;
+        Workspace.RightPane.FileList.ViewMode = viewMode;
+        _settings.Update(s => s with { ViewMode = viewMode });
+        OnPropertyChanged(nameof(ViewMode));
+    }
+
+    /// <summary>썸네일 크기를 적용하고(자동으로 썸네일 모드 전환) 저장한다.</summary>
+    [RelayCommand]
+    private void SetThumbnailSize(string? size)
+    {
+        if (!int.TryParse(size, out var px))
+        {
+            return;
+        }
+
+        Workspace.LeftPane.FileList.ThumbnailSize = px;
+        Workspace.RightPane.FileList.ThumbnailSize = px;
+        Workspace.LeftPane.FileList.ViewMode = FileViewMode.Thumbnails;
+        Workspace.RightPane.FileList.ViewMode = FileViewMode.Thumbnails;
+        _settings.Update(s => s with { ThumbnailSize = px, ViewMode = FileViewMode.Thumbnails });
+        OnPropertyChanged(nameof(ViewMode));
+        OnPropertyChanged(nameof(ThumbnailSize));
+    }
+
     private void OnWorkspacePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName != nameof(WorkspaceViewModel.ActiveFileList))

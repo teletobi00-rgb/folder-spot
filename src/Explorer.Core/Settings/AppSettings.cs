@@ -25,4 +25,10 @@ public sealed record AppSettings
 
     /// <summary>확장자별 파일명 글자색(점 없는 소문자 → #RRGGBB). 기본 프리셋이 채워져 있다.</summary>
     public ImmutableDictionary<string, string> ExtensionColors { get; init; } = ExtensionColorDefaults.Map;
+
+    /// <summary>파일 목록 보기 모드(자세히/간단히/썸네일).</summary>
+    public FileViewMode ViewMode { get; init; } = FileViewMode.Details;
+
+    /// <summary>썸네일 보기의 셀 크기(px). 작게 64 / 보통 96 / 크게 144.</summary>
+    public int ThumbnailSize { get; init; } = 96;
 }

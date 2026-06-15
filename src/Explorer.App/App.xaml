@@ -20,6 +20,9 @@
             <converters:FileSizeConverter x:Key="FileSizeConverter" />
             <converters:ExtensionColorConverter x:Key="ExtensionColorConverter" />
             <converters:HexToBrushConverter x:Key="HexToBrushConverter" />
+            <converters:CompareStateToBrushConverter x:Key="CompareStateToBrushConverter" />
+            <converters:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter" />
+            <converters:EnumToAppearanceConverter x:Key="EnumToAppearanceConverter" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>

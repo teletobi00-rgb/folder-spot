@@ -116,6 +116,35 @@
                            Content="◫"
                            ToolTip="2분할 토글 (Ctrl+Shift+D)" />
                 <ui:Button Margin="4,0,0,0"
+                           Command="{Binding Workspace.ComparePanesCommand}"
+                           Content="⇄ 비교"
+                           ToolTip="두 페인 비교 — 이쪽만(앰버)/최신(초록)/오래됨(파랑). 다시 누르면 갱신, 폴더 이동 시 해제" />
+                <ui:Button Margin="8,0,0,0"
+                           Appearance="{Binding ViewMode, Converter={StaticResource EnumToAppearanceConverter}, ConverterParameter=Details}"
+                           Command="{Binding SetViewModeCommand}"
+                           CommandParameter="Details"
+                           Content="≣"
+                           ToolTip="자세히 보기 (컬럼)" />
+                <ui:Button Margin="2,0,0,0"
+                           Appearance="{Binding ViewMode, Converter={StaticResource EnumToAppearanceConverter}, ConverterParameter=List}"
+                           Command="{Binding SetViewModeCommand}"
+                           CommandParameter="List"
+                           Content="☰"
+                           ToolTip="간단히 보기 (아이콘+이름)" />
+                <ui:Button Margin="2,0,0,0"
+                           Appearance="{Binding ViewMode, Converter={StaticResource EnumToAppearanceConverter}, ConverterParameter=Thumbnails}"
+                           Command="{Binding SetViewModeCommand}"
+                           CommandParameter="Thumbnails"
+                           Content="▦"
+                           ToolTip="썸네일 보기 (미리보기)" />
+                <Menu Margin="2,0,0,0" VerticalAlignment="Center" Background="Transparent">
+                    <MenuItem Header="크기 ▾" ToolTip="썸네일 크기">
+                        <MenuItem Command="{Binding SetThumbnailSizeCommand}" CommandParameter="64" Header="작게" />
+                        <MenuItem Command="{Binding SetThumbnailSizeCommand}" CommandParameter="96" Header="보통" />
+                        <MenuItem Command="{Binding SetThumbnailSizeCommand}" CommandParameter="144" Header="크게" />
+                    </MenuItem>
+                </Menu>
+                <ui:Button Margin="4,0,0,0"
                            Command="{Binding ToggleThemeCommand}"
                            Content="테마"
                            ToolTip="{Binding CurrentTheme}" />

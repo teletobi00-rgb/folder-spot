@@ -32,6 +32,43 @@
             <MenuItem Click="OnShowNativeMenuClick" Header="Windows 메뉴 표시 (불안정 ⚠)" />
             <MenuItem Click="OnShowPropertiesClick" Header="속성" />
         </ContextMenu>
+
+        <!-- 간단히(List) 셀: 작은 아이콘 + 이름, 고정 폭으로 가로 줄바꿈 -->
+        <DataTemplate x:Key="ListItemTemplate">
+            <StackPanel Width="210"
+                        Margin="2,1"
+                        Orientation="Horizontal"
+                        ToolTip="{Binding Name}">
+                <Image Width="16"
+                       Height="16"
+                       Margin="0,0,6,0"
+                       VerticalAlignment="Center"
+                       Source="{Binding Icon}" />
+                <TextBlock VerticalAlignment="Center"
+                           Foreground="{Binding Extension, Converter={StaticResource ExtensionColorConverter}}"
+                           Text="{Binding Name}"
+                           TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- 썸네일 셀: 미리보기 이미지 + 이름. 크기는 페인의 ThumbnailSize -->
+        <DataTemplate x:Key="ThumbnailItemTemplate">
+            <StackPanel Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListView}}"
+                        Margin="6"
+                        ToolTip="{Binding Name}">
+                <Image Height="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListView}}"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       Source="{Binding Thumbnail}"
+                       Stretch="Uniform" />
+                <TextBlock Margin="0,4,0,0"
+                           MaxHeight="32"
+                           Foreground="{Binding Extension, Converter={StaticResource ExtensionColorConverter}}"
+                           Text="{Binding Name}"
+                           TextAlignment="Center"
+                           TextTrimming="CharacterEllipsis"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </DataTemplate>
     </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
@@ -56,6 +93,7 @@
                   Background="{DynamicResource ApplicationBackgroundBrush}"
                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                   BorderThickness="0"
+                  Visibility="{Binding ViewMode, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Details}"
                   ItemsSource="{Binding Items}"
                   SelectedItem="{Binding SelectedItem}"
                   SelectionMode="Extended"
@@ -83,6 +121,8 @@
                     <!-- 확장자 색이 없는 항목(폴더·dll 등)이 상속받을 기본 글자색 — 다크/라이트 적응.
                          확장자 색이 있는 항목은 이름 TextBlock이 이 값을 덮어쓴다. -->
                     <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <!-- 두 페인 비교 시 행 배경 틴트(반투명). 비교 안 하면 투명. -->
+                    <Setter Property="Background" Value="{Binding CompareState, Converter={StaticResource CompareStateToBrushConverter}}" />
                 </Style>
             </ListView.ItemContainerStyle>
             <ListView.Resources>
@@ -172,6 +212,44 @@
                                     Header="특성" />
                 </GridView>
             </ListView.View>
+        </ListView>
+
+        <!-- 간단히/썸네일 보기 (WrapPanel). 자세히가 아닐 때 표시 -->
+        <ListView x:Name="IconsList"
+                  Grid.Row="1"
+                  Background="{DynamicResource ApplicationBackgroundBrush}"
+                  BorderThickness="0"
+                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                  ItemsSource="{Binding Items}"
+                  SelectedItem="{Binding SelectedItem}"
+                  SelectionMode="Extended"
+                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                  ContextMenu="{StaticResource ItemContextMenu}"
+                  MouseDoubleClick="OnItemDoubleClick"
+                  SelectionChanged="OnSelectionChanged"
+                  Visibility="{Binding ViewMode, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter='List,Thumbnails'}">
+            <ListView.Style>
+                <Style TargetType="ListView">
+                    <Setter Property="ItemTemplate" Value="{StaticResource ListItemTemplate}" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding ViewMode}" Value="Thumbnails">
+                            <Setter Property="ItemTemplate" Value="{StaticResource ThumbnailItemTemplate}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ListView.Style>
+            <ListView.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+            </ListView.ItemsPanel>
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="Margin" Value="0" />
+                    <Setter Property="Padding" Value="2" />
+                    <Setter Property="Background" Value="{Binding CompareState, Converter={StaticResource CompareStateToBrushConverter}}" />
+                </Style>
+            </ListView.ItemContainerStyle>
         </ListView>
 
         <!-- 로딩 오버레이 -->

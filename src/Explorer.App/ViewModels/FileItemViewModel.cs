@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Explorer.Core.FileSystem;
 using Explorer.Core.Formatting;
 using Explorer.Shell.Icons;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Explorer.App.ViewModels;
 
@@ -19,6 +20,9 @@ public sealed partial class FileItemViewModel : ObservableObject
     private string? _attributesText;
     private ImageSource? _icon;
     private bool _iconRequested;
+    private ImageSource? _thumbnail;
+    private bool _thumbnailRequested;
+    private const int ThumbnailLoadSize = 256;
 
     /// <summary>잘라내기 표시 상태 (시각적 흐림 처리용).</summary>
     [ObservableProperty]
@@ -32,6 +36,10 @@ public sealed partial class FileItemViewModel : ObservableObject
     /// <summary>이름 변경 편집 텍스트.</summary>
     [ObservableProperty]
     private string _editName = string.Empty;
+
+    /// <summary>두 페인 비교 결과(행 색 표시용).</summary>
+    [ObservableProperty]
+    private FileCompareState _compareState;
 
     public FileItemViewModel(FileEntry entry, IShellIconProvider iconProvider)
     {
@@ -89,6 +97,37 @@ public sealed partial class FileItemViewModel : ObservableObject
             }
 
             return _icon;
+        }
+    }
+
+    /// <summary>썸네일 보기용 큰 미리보기(첫 접근 시 지연 로드). 로드 전/실패 시 작은 아이콘으로 폴백.</summary>
+    public ImageSource? Thumbnail
+    {
+        get
+        {
+            if (!_thumbnailRequested)
+            {
+                _thumbnailRequested = true;
+                _ = LoadThumbnailAsync();
+            }
+
+            return _thumbnail ?? Icon;
+        }
+    }
+
+    private async Task LoadThumbnailAsync()
+    {
+        var provider = App.Services.GetService<IShellThumbnailProvider>();
+        if (provider is null)
+        {
+            return;
+        }
+
+        var image = await provider.GetThumbnailAsync(Entry.FullPath, ThumbnailLoadSize).ConfigureAwait(true);
+        if (image is not null)
+        {
+            _thumbnail = image;
+            OnPropertyChanged(nameof(Thumbnail));
         }
     }
 

@@ -152,6 +152,21 @@ public sealed partial class WorkspaceViewModel : ObservableObject, IDisposable
         NotifyPaneDerivedProperties();
     }
 
+    /// <summary>두 페인을 이름·날짜·크기로 비교해 행 색으로 표시한다(이쪽만=앰버/최신=초록/오래됨=파랑). 다시 누르면 갱신.</summary>
+    [RelayCommand(CanExecute = nameof(IsDualMode))]
+    private void ComparePanes()
+    {
+        Explorer.App.Services.PaneComparer.Compare(LeftPane.FileList.Items, RightPane.FileList.Items);
+    }
+
+    /// <summary>비교 색 표시를 지운다.</summary>
+    [RelayCommand]
+    private void ClearComparison()
+    {
+        Explorer.App.Services.PaneComparer.Clear(LeftPane.FileList.Items);
+        Explorer.App.Services.PaneComparer.Clear(RightPane.FileList.Items);
+    }
+
     /// <summary>Ctrl+Q — 반대 페인 미리보기 토글. 미리보기는 비활성 페인에 뜨고 활성 페인 선택을 따라간다.</summary>
     [RelayCommand(CanExecute = nameof(IsDualMode))]
     private void ToggleQuickView()

@@ -91,6 +91,7 @@ public partial class App : Application
         services.AddSingleton<IDriveProvider, DriveInfoDriveProvider>();
         services.AddSingleton<IFileLauncher, ShellFileLauncher>();
         services.AddSingleton<IShellIconProvider, ShellIconProvider>();
+        services.AddSingleton<IShellThumbnailProvider, ShellThumbnailProvider>();
         services.AddSingleton<IFileOperationService>(provider => new ShellFileOperationService(
             () => System.Threading.Volatile.Read(ref _mainWindowHandle),
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ShellFileOperationService>>()));

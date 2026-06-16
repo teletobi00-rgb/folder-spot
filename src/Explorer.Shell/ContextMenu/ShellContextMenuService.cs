@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using Explorer.Core.FileSystem;
@@ -29,11 +31,13 @@ public interface IShellContextMenuService
 public sealed class ShellContextMenuService : IShellContextMenuService
 {
     private readonly ILogger<ShellContextMenuService> _logger;
+    private readonly string? _helperPath;
 
-    public ShellContextMenuService(ILogger<ShellContextMenuService> logger)
+    public ShellContextMenuService(ILogger<ShellContextMenuService> logger, string? helperPath = null)
     {
         ArgumentNullException.ThrowIfNull(logger);
         _logger = logger;
+        _helperPath = helperPath;
     }
 
     public void ShowMenu(IReadOnlyList<string> paths, int screenX, int screenY)
@@ -43,50 +47,49 @@ public sealed class ShellContextMenuService : IShellContextMenuService
             return;
         }
 
-        var stopwatch = Stopwatch.StartNew();
-        var items = new List<ShellItem>(paths.Count);
+        // 기본: 별도 헬퍼 프로세스에서 호스팅 — 서드파티 셸 확장이 QueryContextMenu에서 힙을 손상(0xc0000374)시켜도
+        // 헬퍼만 죽고 본체는 산다(이 머신의 특정 확장이 비탐색기 프로세스에서 호스팅만으로 크래시하는 문제 회피).
+        if (_helperPath is { } helper && File.Exists(helper))
+        {
+            LaunchHelper(helper, paths, screenX, screenY);
+            return;
+        }
+
+        // 헬퍼 미배포 시에만 in-proc 폴백(격리 없음 — 기능 유지 우선).
+        _logger.LogWarning("셸 메뉴 헬퍼를 찾을 수 없어 in-proc로 표시합니다(확장에 따라 불안정할 수 있음).");
+        NativeContextMenuHost.Show(paths, screenX, screenY, _logger);
+    }
+
+    private void LaunchHelper(string helper, IReadOnlyList<string> paths, int screenX, int screenY)
+    {
         try
         {
-            foreach (var path in paths)
-            {
-                items.Add(new ShellItem(PathUtils.Normalize(path)));
-            }
+            // 경로 목록은 인자 길이/특수문자 한계를 피해 임시 파일로 전달(헬퍼가 읽고 삭제).
+            var requestFile = Path.Combine(
+                Path.GetTempPath(), $"folderspot-menu-{Guid.NewGuid():N}.txt");
+            File.WriteAllLines(requestFile, paths);
 
-            // 해제 순서가 결정적으로 중요하다: 메뉴 → keepAlive → ShellItem.
-            // keepAlive는 메뉴의 네이티브 리소스를 떠받치므로 메뉴보다 먼저 해제하면
-            // 이중 해제로 힙 손상(0xc0000374)이 발생한다 (Vanara 공식 테스트 패턴 준수).
-            var menu = ShellContextMenu.CreateFromItems(items, out var keepAlive);
-            try
+            var startInfo = new ProcessStartInfo
             {
-                var createdMs = stopwatch.ElapsedMilliseconds;
+                FileName = helper,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            startInfo.ArgumentList.Add(screenX.ToString(CultureInfo.InvariantCulture));
+            startInfo.ArgumentList.Add(screenY.ToString(CultureInfo.InvariantCulture));
+            startInfo.ArgumentList.Add(requestFile);
 
-                // QueryContextMenu(셸 확장 열거)가 가장 느린 단계 — 표시와 분리해 계측한다.
-                // ShowContextMenu는 같은 옵션으로 만든 메뉴를 캐시 재사용한다.
-                menu.PopulateMenu();
-                var populatedMs = stopwatch.ElapsedMilliseconds;
-                _logger.LogDebug(
-                    "컨텍스트 메뉴 준비: 항목 {CreateMs}ms + 확장 열거 {PopulateMs}ms ({Count}개 항목)",
-                    createdMs, populatedMs - createdMs, paths.Count);
-
-                menu.ShowContextMenu(new POINT(screenX, screenY));
-            }
-            finally
+            var process = Process.Start(startInfo);
+            if (process is not null)
             {
-                menu.Dispose();
-                keepAlive.Dispose();
+                // 헬퍼 창이 메뉴 포커스를 가질 수 있도록 포그라운드 전환을 허용한다.
+                User32.AllowSetForegroundWindow((uint)process.Id);
             }
         }
         catch (Exception ex)
+            when (ex is IOException or UnauthorizedAccessException or Win32Exception or InvalidOperationException)
         {
-            // 서드파티 셸 확장이 in-proc에서 어떤 예외든 던질 수 있다(R-SHELLCRASH) — 앱 크래시로 번지지 않게 격리.
-            _logger.LogWarning(ex, "셸 컨텍스트 메뉴 표시 실패: {Paths}", string.Join(", ", paths));
-        }
-        finally
-        {
-            foreach (var item in items)
-            {
-                item.Dispose();
-            }
+            _logger.LogWarning(ex, "셸 메뉴 헬퍼 실행 실패: {Paths}", string.Join(", ", paths));
         }
     }
 

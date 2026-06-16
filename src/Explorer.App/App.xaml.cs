@@ -97,7 +97,9 @@ public partial class App : Application
             () => System.Threading.Volatile.Read(ref _mainWindowHandle),
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ShellFileOperationService>>()));
         services.AddSingleton<IFileClipboardService, WpfFileClipboardService>();
-        services.AddSingleton<IShellContextMenuService, ShellContextMenuService>();
+        services.AddSingleton<IShellContextMenuService>(provider => new ShellContextMenuService(
+            provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<ShellContextMenuService>>(),
+            ResolveHelperPath("Explorer.Helper.ShellMenu.exe")));
         services.AddSingleton<IFavoritesService>(provider => new JsonFavoritesService(
             AppPaths.FavoritesFile,
             provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<JsonFavoritesService>>()));
@@ -178,10 +180,9 @@ public partial class App : Application
         services.AddSingleton<SearchPopupWindow>();
     }
 
-    /// <summary>권한 헬퍼 실행 파일 경로를 찾는다 (배포: 앱 옆 / 개발: 형제 프로젝트 bin). 없으면 null.</summary>
-    private static string? ResolveHelperPath()
+    /// <summary>헬퍼 실행 파일 경로를 찾는다 (배포: 앱 옆 / 개발: 형제 프로젝트 bin). 없으면 null.</summary>
+    private static string? ResolveHelperPath(string helperExe = "Explorer.Helper.Elevated.exe")
     {
-        const string helperExe = "Explorer.Helper.Elevated.exe";
         var baseDir = AppContext.BaseDirectory;
 
         // 1) 배포 시 앱 실행 파일과 같은 폴더
@@ -193,9 +194,10 @@ public partial class App : Application
 
         // 2) 개발 빌드: ...\src\Explorer.App\bin\<cfg>\net10.0-windows\ → 형제 헬퍼 bin
         var configuration = new DirectoryInfo(baseDir).Parent?.Name ?? "Debug"; // net10.0-windows의 부모 = <cfg>
+        var projectFolder = Path.GetFileNameWithoutExtension(helperExe);
         var devPath = Path.Combine(
             baseDir, "..", "..", "..", "..",
-            "Explorer.Helper.Elevated", "bin", configuration, "net10.0-windows", helperExe);
+            projectFolder, "bin", configuration, "net10.0-windows", helperExe);
         return File.Exists(devPath) ? Path.GetFullPath(devPath) : null;
     }
 

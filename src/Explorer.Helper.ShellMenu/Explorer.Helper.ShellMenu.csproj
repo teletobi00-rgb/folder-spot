@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- 네이티브 셸 컨텍스트 메뉴를 별도 프로세스에서 호스팅 — 서드파티 확장의 힙 손상을 본체와 격리. -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyTitle>Folder Spot 셸 메뉴 호스트</AssemblyTitle>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Explorer.Core\Explorer.Core.csproj" />
+    <ProjectReference Include="..\Explorer.Shell\Explorer.Shell.csproj" />
+  </ItemGroup>
+
+</Project>

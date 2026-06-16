@@ -3,6 +3,7 @@
     <Project Path="src/Explorer.App/Explorer.App.csproj" />
     <Project Path="src/Explorer.Core/Explorer.Core.csproj" />
     <Project Path="src/Explorer.Helper.Elevated/Explorer.Helper.Elevated.csproj" />
+    <Project Path="src/Explorer.Helper.ShellMenu/Explorer.Helper.ShellMenu.csproj" />
     <Project Path="src/Explorer.Indexing/Explorer.Indexing.csproj" />
     <Project Path="src/Explorer.Preview/Explorer.Preview.csproj" />
     <Project Path="src/Explorer.Shell/Explorer.Shell.csproj" />

@@ -92,7 +92,15 @@ public sealed class TrayService : IDisposable
         };
         _trayIcon.TrayLeftMouseUp += (_, _) => showMainWindow();
         _trayIcon.TrayMouseDoubleClick += (_, _) => showMainWindow();
+
+        // 코드로 만든 TaskbarIcon이 메시지 루프 타이밍에 따라 늦거나 안 뜨는 것을 막고 즉시 등록한다.
+        _trayIcon.ForceCreate();
     }
+
+    /// <summary>창을 트레이로 숨길 때 1회 — 백그라운드 상주를 사용자에게 알린다(Win11 오버플로에 숨어도 보이게).</summary>
+    public void ShowResidentNotice() => _trayIcon?.ShowNotification(
+        "Folder Spot",
+        "트레이에서 계속 실행 중입니다. 완전히 종료하려면 트레이 아이콘을 우클릭 → 종료를 선택하세요.");
 
     /// <summary>업데이트 준비 이벤트(백그라운드 스레드) → UI 스레드에서 메뉴 항목 표시 + 알림.</summary>
     private void WireUpdateReady(UpdateService updateService, MenuItem updateItem)

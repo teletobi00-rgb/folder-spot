@@ -37,6 +37,7 @@ public partial class MainWindow : FluentWindow
 
     private readonly MainWindowViewModel _viewModel;
     private readonly AppLifecycle _lifecycle;
+    private bool _trayNoticeShown;
 
     public MainWindow(MainWindowViewModel viewModel, AppLifecycle lifecycle)
     {
@@ -63,6 +64,7 @@ public partial class MainWindow : FluentWindow
                 e.Cancel = true;
                 Hide();
                 TrimMemoryWhenHidden();
+                ShowTrayNoticeOnce();
                 return;
             }
 
@@ -82,6 +84,18 @@ public partial class MainWindow : FluentWindow
 
         // 마우스 뒤로/앞으로 버튼(XButton1/2) → 활성 페인 폴더 이동. 터널링이라 자식이 먹어도 잡는다.
         PreviewMouseDown += OnNavigationMouseButton;
+    }
+
+    /// <summary>트레이로 처음 숨길 때 1회 — 백그라운드 상주 사실을 알림으로 알린다.</summary>
+    private void ShowTrayNoticeOnce()
+    {
+        if (_trayNoticeShown)
+        {
+            return;
+        }
+
+        _trayNoticeShown = true;
+        App.Services.GetService<TrayService>()?.ShowResidentNotice();
     }
 
     /// <summary>트레이로 숨겨 유휴가 되면 백그라운드에서 가비지 수거 + 워킹셋 반환(다음 표시 때 페이지 폴트로 복구).</summary>

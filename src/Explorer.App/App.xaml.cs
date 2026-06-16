@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using System.Threading;
 using System.Windows;
 using System.Windows.Interop;
 using Explorer.App.Input;
@@ -38,6 +39,10 @@ using Velopack.Sources;
 
 namespace Explorer.App;
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage(
+    "Design",
+    "CA1001:Types that own disposable fields should be disposable",
+    Justification = "WPF Application은 IDisposable이 아니라 OnExit에서 자원을 정리한다.")]
 public partial class App : Application
 {
     private readonly IHost _host;
@@ -46,6 +51,12 @@ public partial class App : Application
     /// 도는데 거기서 Application.MainWindow(DispatcherObject)에 접근하면 크로스 스레드 예외가 난다.
     /// 핸들 자체는 스레드 무관(IntPtr)하므로 이것만 공유한다.</summary>
     private static IntPtr _mainWindowHandle;
+
+    // 단일 인스턴스: 두 번째 실행은 기존 인스턴스를 깨우고 즉시 종료한다(핫키 중복 등록 충돌·유령 프로세스 방지).
+    private const string SingleInstanceMutexName = "Local\\FolderSpot.SingleInstance.9F2A1C7E-3B5D-4E8A-A1C2-7D6F0B4E2A11";
+    private const string ActivateSignalName = "Local\\FolderSpot.Activate.9F2A1C7E-3B5D-4E8A-A1C2-7D6F0B4E2A11";
+    private Mutex? _singleInstanceMutex;
+    private EventWaitHandle? _activateSignal;
 
     /// <summary>View 계층의 글루 코드용 서비스 접근점 (ViewModel은 생성자 주입을 쓴다).</summary>
     public static IServiceProvider Services => ((App)Current)._host.Services;
@@ -211,6 +222,17 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // 이미 실행 중이면(트레이 상주 포함) 기존 인스턴스를 깨우고 이 프로세스는 즉시 종료한다.
+        _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var isPrimary);
+        if (!isPrimary)
+        {
+            Log.Information("이미 실행 중인 인스턴스 발견 — 기존 창을 활성화하고 종료");
+            SignalExistingInstance();
+            Shutdown();
+            return;
+        }
+
         Log.Information("OnStartup 진입");
         RegisterGlobalExceptionHandlers();
 
@@ -232,6 +254,9 @@ public partial class App : Application
         System.Threading.Volatile.Write(ref _mainWindowHandle, new WindowInteropHelper(window).EnsureHandle());
         window.Show();
 
+        // 두 번째 실행이 보내는 활성화 신호를 받아 창을 다시 띄운다.
+        StartActivationListener(window);
+
         // 셸 확장 DLL 선로딩 — 첫 우클릭 메뉴 지연을 줄인다. (진단용 비활성화: EXPLORER_DISABLE_MENU_WARMUP=1)
         if (Environment.GetEnvironmentVariable("EXPLORER_DISABLE_MENU_WARMUP") != "1")
         {
@@ -240,6 +265,47 @@ public partial class App : Application
 
         SetUpGlobalSearch(window);
         Log.Information("Explorer 시작 완료");
+    }
+
+    /// <summary>두 번째 인스턴스가 실행될 때 보내는 신호를 받아 기존 창을 다시 띄우는 백그라운드 리스너.</summary>
+    private void StartActivationListener(MainWindow window)
+    {
+        _activateSignal = new EventWaitHandle(initialState: false, EventResetMode.AutoReset, ActivateSignalName);
+        var listener = new Thread(() =>
+        {
+            while (true)
+            {
+                try
+                {
+                    _activateSignal.WaitOne();
+                }
+                catch (Exception ex) when (ex is ObjectDisposedException or AbandonedMutexException)
+                {
+                    break; // 종료 중 — 리스너도 끝낸다.
+                }
+
+                Dispatcher.BeginInvoke(window.ShowFromTray);
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "FolderSpot.ActivationListener",
+        };
+        listener.Start();
+    }
+
+    /// <summary>이미 실행 중인 인스턴스에 "창을 띄워라" 신호를 보낸다.</summary>
+    private static void SignalExistingInstance()
+    {
+        try
+        {
+            using var signal = EventWaitHandle.OpenExisting(ActivateSignalName);
+            signal.Set();
+        }
+        catch (Exception ex) when (ex is WaitHandleCannotBeOpenedException or UnauthorizedAccessException)
+        {
+            Log.Warning(ex, "기존 인스턴스 활성화 신호 전송 실패 (아직 준비 전일 수 있음)");
+        }
     }
 
     /// <summary>전역 검색 핫키 + 팝업 + 트레이 배선.</summary>
@@ -288,14 +354,22 @@ public partial class App : Application
 
         var settings = _host.Services.GetRequiredService<ISettingsService>();
         var updateService = _host.Services.GetRequiredService<UpdateService>();
-        _host.Services.GetRequiredService<TrayService>().Initialize(
-            window.ShowFromTray,
-            popup.Toggle,
-            _host.Services.GetRequiredService<IAutoStartService>(),
-            _host.Services.GetRequiredService<AppLifecycle>(),
-            getFastIndexing: () => settings.Current.UseFastIndexing,
-            setFastIndexing: enabled => settings.Update(s => s with { UseFastIndexing = enabled }),
-            updateService);
+        try
+        {
+            _host.Services.GetRequiredService<TrayService>().Initialize(
+                window.ShowFromTray,
+                popup.Toggle,
+                _host.Services.GetRequiredService<IAutoStartService>(),
+                _host.Services.GetRequiredService<AppLifecycle>(),
+                getFastIndexing: () => settings.Current.UseFastIndexing,
+                setFastIndexing: enabled => settings.Update(s => s with { UseFastIndexing = enabled }),
+                updateService);
+        }
+        catch (Exception ex)
+        {
+            // 트레이 아이콘 생성 실패가 앱 시작을 막으면 안 된다(창은 정상 동작).
+            Log.Error(ex, "트레이 아이콘 초기화 실패 — 트레이 없이 계속");
+        }
 
         // 시작 직후 부하를 피해 잠시 뒤 백그라운드에서 업데이트 확인(설치본이 아니면 즉시 no-op).
         _ = Task.Run(async () =>
@@ -315,6 +389,8 @@ public partial class App : Application
         finally
         {
             _host.Dispose();
+            _activateSignal?.Dispose();
+            _singleInstanceMutex?.Dispose();
             Log.CloseAndFlush();
         }
 

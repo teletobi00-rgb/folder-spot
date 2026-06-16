@@ -4,6 +4,7 @@
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 xmlns:app="clr-namespace:Explorer.App"
                  xmlns:viewmodels="clr-namespace:Explorer.App.ViewModels"
                  xmlns:views="clr-namespace:Explorer.App.Views"
                  mc:Ignorable="d"
@@ -540,6 +541,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" FontSize="12" Opacity="0.7">
                 <Run Text="{Binding Workspace.ActiveFileList.Items.Count, Mode=OneWay}" /><Run Text="개 항목" />
@@ -550,6 +552,12 @@
                        Opacity="0.7"
                        Text="{Binding Workspace.ActiveFileList.StatusMessage}"
                        TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Column="2"
+                       Margin="16,0,0,0"
+                       FontSize="12"
+                       Opacity="0.55"
+                       Text="{x:Static app:AppInfo.Version}"
+                       ToolTip="Folder Spot 버전" />
         </Grid>
     </Grid>
 </ui:FluentWindow>

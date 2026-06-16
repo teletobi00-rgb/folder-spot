@@ -45,7 +45,8 @@ $projects = @(
 foreach ($proj in $projects) {
     Write-Host "-- publish: $proj" -ForegroundColor DarkGray
     # ReadyToRun: precompile IL to native to cut JIT warmup / speed up startup.
-    dotnet publish (Join-Path $root $proj) -c $Configuration -r $Runtime --self-contained true -p:PublishReadyToRun=true -o $pub
+    # -p:Version stamps the assembly so the app can show its release version at runtime.
+    dotnet publish (Join-Path $root $proj) -c $Configuration -r $Runtime --self-contained true -p:PublishReadyToRun=true -p:Version=$Version -o $pub
     if ($LASTEXITCODE -ne 0) { throw "publish failed: $proj" }
 }
 

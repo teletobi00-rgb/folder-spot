@@ -33,6 +33,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
+using Velopack;
+using Velopack.Sources;
 
 namespace Explorer.App;
 
@@ -50,6 +52,10 @@ public partial class App : Application
 
     public App()
     {
+        // Velopack 설치/업데이트 훅을 가장 먼저 처리한다(설치·업데이트·제거 시 여기서 처리 후 종료,
+        // 일반 실행이면 즉시 반환). UI/호스트보다 앞서야 한다.
+        VelopackApp.Build().Run();
+
         // 호스트 빌드 실패까지 잡을 수 있도록 2단계 초기화(부트스트랩 로거 → 호스트 로거)를 쓴다.
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.Information()
@@ -175,6 +181,7 @@ public partial class App : Application
         services.AddSingleton<AppLifecycle>();
         services.AddSingleton<IAutoStartService, RegistryAutoStartService>();
         services.AddSingleton<IInstalledAppCatalog, InstalledAppCatalog>();
+        services.AddSingleton<UpdateService>();
         services.AddSingleton<TrayService>();
         services.AddSingleton<SearchPopupViewModel>();
         services.AddSingleton<SearchPopupWindow>();
@@ -280,13 +287,22 @@ public partial class App : Application
         }
 
         var settings = _host.Services.GetRequiredService<ISettingsService>();
+        var updateService = _host.Services.GetRequiredService<UpdateService>();
         _host.Services.GetRequiredService<TrayService>().Initialize(
             window.ShowFromTray,
             popup.Toggle,
             _host.Services.GetRequiredService<IAutoStartService>(),
             _host.Services.GetRequiredService<AppLifecycle>(),
             getFastIndexing: () => settings.Current.UseFastIndexing,
-            setFastIndexing: enabled => settings.Update(s => s with { UseFastIndexing = enabled }));
+            setFastIndexing: enabled => settings.Update(s => s with { UseFastIndexing = enabled }),
+            updateService);
+
+        // 시작 직후 부하를 피해 잠시 뒤 백그라운드에서 업데이트 확인(설치본이 아니면 즉시 no-op).
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromSeconds(8)).ConfigureAwait(false);
+            await updateService.CheckAndDownloadAsync().ConfigureAwait(false);
+        });
     }
 
     protected override void OnExit(ExitEventArgs e)

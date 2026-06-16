@@ -5,6 +5,7 @@
   </PropertyGroup>
 
   <ItemGroup Label="App">
+    <PackageVersion Include="Velopack" Version="1.2.0" />
     <PackageVersion Include="WPF-UI" Version="4.3.0" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.9" />

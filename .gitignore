@@ -6,6 +6,9 @@
 # dotenv files
 .env
 
+# Velopack 패키징 산출물 (publish/는 아래에 이미 포함)
+Releases/
+
 # User-specific files
 *.rsuser
 *.suo

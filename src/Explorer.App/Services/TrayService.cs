@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Controls;
 using H.NotifyIcon;
 
@@ -14,7 +15,8 @@ public sealed class TrayService : IDisposable
         IAutoStartService autoStart,
         AppLifecycle lifecycle,
         Func<bool> getFastIndexing,
-        Action<bool> setFastIndexing)
+        Action<bool> setFastIndexing,
+        UpdateService updateService)
     {
         ArgumentNullException.ThrowIfNull(showMainWindow);
         ArgumentNullException.ThrowIfNull(toggleSearch);
@@ -22,8 +24,15 @@ public sealed class TrayService : IDisposable
         ArgumentNullException.ThrowIfNull(lifecycle);
         ArgumentNullException.ThrowIfNull(getFastIndexing);
         ArgumentNullException.ThrowIfNull(setFastIndexing);
+        ArgumentNullException.ThrowIfNull(updateService);
 
         var menu = new ContextMenu();
+
+        // 업데이트가 준비되면 보이는 항목(평소엔 숨김). 클릭하면 적용 후 재시작.
+        var updateItem = new MenuItem { Header = "⬆ 업데이트 설치 후 재시작", Visibility = Visibility.Collapsed };
+        updateItem.Click += (_, _) => updateService.ApplyAndRestart();
+        menu.Items.Add(updateItem);
+        WireUpdateReady(updateService, updateItem);
 
         var openItem = new MenuItem { Header = "열기" };
         openItem.Click += (_, _) => showMainWindow();
@@ -83,6 +92,20 @@ public sealed class TrayService : IDisposable
         };
         _trayIcon.TrayLeftMouseUp += (_, _) => showMainWindow();
         _trayIcon.TrayMouseDoubleClick += (_, _) => showMainWindow();
+    }
+
+    /// <summary>업데이트 준비 이벤트(백그라운드 스레드) → UI 스레드에서 메뉴 항목 표시 + 알림.</summary>
+    private void WireUpdateReady(UpdateService updateService, MenuItem updateItem)
+    {
+        updateService.UpdateReady += (_, _) =>
+            Application.Current?.Dispatcher.Invoke(() =>
+            {
+                updateItem.Header = $"⬆ 업데이트 설치 후 재시작 (v{updateService.PendingVersion})";
+                updateItem.Visibility = Visibility.Visible;
+                _trayIcon?.ShowNotification(
+                    "업데이트 준비됨",
+                    $"새 버전 v{updateService.PendingVersion}을(를) 받았습니다. 트레이 메뉴에서 설치하세요.");
+            });
     }
 
     /// <summary>번들된 app.ico에서 트레이 아이콘을 로드한다(실패 시 시스템 기본).</summary>

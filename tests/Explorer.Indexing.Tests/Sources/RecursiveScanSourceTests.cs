@@ -11,7 +11,8 @@ public sealed class RecursiveScanSourceTests : IDisposable
 
     public RecursiveScanSourceTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "ExplorerTests", Guid.NewGuid().ToString("N"));
+        // Temp는 IndexExclusions의 제외 대상이라 스캔이 비게 된다 — 제외되지 않는 테스트 bin 하위에 스크래치 생성.
+        _root = Path.Combine(AppContext.BaseDirectory, "ScanTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
     }
 

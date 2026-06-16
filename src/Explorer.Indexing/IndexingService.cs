@@ -1,4 +1,5 @@
-﻿using Explorer.Core.FileSystem;
+﻿using System.Runtime;
+using Explorer.Core.FileSystem;
 using Explorer.Indexing.Index;
 using Explorer.Indexing.Persistence;
 using Explorer.Indexing.Sources;
@@ -244,8 +245,37 @@ public sealed class IndexingService : IHostedService, IDisposable
         _logger.LogInformation("인덱스 재구축 완료: {Total:N0}개 항목 (USN {Usn}개 볼륨)",
             rebuilt.Count, _usnSources.Count);
         SaveSnapshotIfDirty();
+
+        // 재구축으로 버려진 이전 인덱스(대형 LOH 배열)와 스캔 중 생긴 가비지를 OS에 반환한다.
+        TrimMemory();
         return fallbackRoots;
     }
+
+    /// <summary>대규모 재구축 직후 LOH 압축 + 워킹셋 트림으로 메모리를 OS에 반환한다(백그라운드 스레드에서만 호출).</summary>
+    private void TrimMemory()
+    {
+        try
+        {
+            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+            EmptyWorkingSet(GetCurrentProcess());
+            _logger.LogDebug("인덱싱 후 메모리 트림 완료");
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
+        {
+            // 트림은 최적화일 뿐 — 실패해도 기능엔 영향 없음.
+            _logger.LogDebug(ex, "워킹셋 트림 생략");
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+    private static extern IntPtr GetCurrentProcess();
+
+    [System.Runtime.InteropServices.DllImport("psapi.dll", SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool EmptyWorkingSet(IntPtr hProcess);
 
     /// <summary>USN 고속 경로 시도. 열거 성공 시 true(소스는 tailing 유지), 실패 시 false(호출자 폴백).</summary>
     private async Task<bool> TryUsnRescanAsync(string root, FileIndex rebuilt, CancellationToken ct)
@@ -334,6 +364,12 @@ public sealed class IndexingService : IHostedService, IDisposable
 
     private static void AddPath(FileIndex index, string fullPath, bool isDirectory)
     {
+        // 증분(FSW/USN)도 스캔과 동일하게 정크 트리는 인덱싱하지 않는다.
+        if (IndexExclusions.IsExcludedPath(fullPath))
+        {
+            return;
+        }
+
         var parent = Path.GetDirectoryName(fullPath);
         var name = Path.GetFileName(fullPath);
         if (!string.IsNullOrEmpty(parent) && name.Length > 0)

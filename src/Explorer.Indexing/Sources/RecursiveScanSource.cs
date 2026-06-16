@@ -46,7 +46,16 @@ public sealed class RecursiveScanSource
                     IsDirectory: entry.IsDirectory,
                     Size: entry.IsDirectory ? 0 : entry.Length,
                     ModifiedTicks: entry.LastWriteTimeUtc.LocalDateTime.Ticks),
-                options);
+                options)
+            {
+                // 정크 트리(WinSxS·node_modules·.git·캐시 등)는 진입하지도, 포함하지도 않는다 — 노드 수↓ = 메모리↓.
+                // 파일은 IsDirectory 단락으로 ToFullPath 비용을 치르지 않는다(디렉터리만 검사).
+                ShouldRecursePredicate = (ref FileSystemEntry entry) =>
+                    !IndexExclusions.IsExcludedDirectory(entry.ToFullPath(), entry.FileName.ToString()),
+                ShouldIncludePredicate = (ref FileSystemEntry entry) =>
+                    !entry.IsDirectory
+                    || !IndexExclusions.IsExcludedDirectory(entry.ToFullPath(), entry.FileName.ToString()),
+            };
 
             long total = 0;
             var batch = new List<IndexItem>(BatchSize);

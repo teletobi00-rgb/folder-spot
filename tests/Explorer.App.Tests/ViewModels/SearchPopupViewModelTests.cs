@@ -4,6 +4,7 @@ using Explorer.Core.FileSystem;
 using Explorer.Core.Search;
 using Explorer.Indexing;
 using Explorer.Indexing.Index;
+using Explorer.Shell.Apps;
 using Explorer.Shell.Icons;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -27,9 +28,16 @@ public sealed class SearchPopupViewModelTests : IDisposable
         index.AddOrUpdate(new IndexItem(@"C:\코드", "main.cs", false, 50, 0));
     }
 
-    private SearchPopupViewModel CreateViewModel() => new(
-        _catalog, _launcher, _usage, Substitute.For<IShellIconProvider>(),
-        NullLogger<SearchPopupViewModel>.Instance);
+    private SearchPopupViewModel CreateViewModel()
+    {
+        var apps = Substitute.For<IInstalledAppCatalog>();
+        apps.SearchAsync(Arg.Any<string>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<IReadOnlyList<AppHit>>([]));
+        return new SearchPopupViewModel(
+            _catalog, _launcher, _usage, Substitute.For<IShellIconProvider>(),
+            Substitute.For<IShellThumbnailProvider>(), apps,
+            NullLogger<SearchPopupViewModel>.Instance);
+    }
 
     [Fact]
     public async Task TypingQuery_DebouncesThenShowsResults_FirstSelected()

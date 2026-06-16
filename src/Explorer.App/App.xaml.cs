@@ -22,6 +22,7 @@ using Explorer.Indexing.Persistence;
 using Explorer.Indexing.Sources;
 using Explorer.Preview;
 using Explorer.Preview.Renderers;
+using Explorer.Shell.Apps;
 using Explorer.Shell.Clipboard;
 using Explorer.Shell.ContextMenu;
 using Explorer.Shell.Drives;
@@ -171,6 +172,7 @@ public partial class App : Application
         services.AddSingleton<IGlobalHotkeyService, GlobalHotkeyService>();
         services.AddSingleton<AppLifecycle>();
         services.AddSingleton<IAutoStartService, RegistryAutoStartService>();
+        services.AddSingleton<IInstalledAppCatalog, InstalledAppCatalog>();
         services.AddSingleton<TrayService>();
         services.AddSingleton<SearchPopupViewModel>();
         services.AddSingleton<SearchPopupWindow>();
@@ -235,6 +237,9 @@ public partial class App : Application
     private void SetUpGlobalSearch(MainWindow window)
     {
         _host.Services.GetRequiredService<ISearchUsageStore>().Load();
+
+        // 설치된 앱 카탈로그(AppsFolder 열거)를 백그라운드에서 미리 구성 — 첫 검색 지연 제거.
+        _ = _host.Services.GetRequiredService<IInstalledAppCatalog>().WarmUpAsync();
 
         var mainViewModel = _host.Services.GetRequiredService<MainWindowViewModel>();
         var popup = _host.Services.GetRequiredService<SearchPopupWindow>();

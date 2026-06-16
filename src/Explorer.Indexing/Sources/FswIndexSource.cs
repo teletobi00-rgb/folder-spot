@@ -48,8 +48,11 @@ public sealed class FswIndexSource : IDisposable
                 | NotifyFilters.Size | NotifyFilters.LastWrite,
             InternalBufferSize = 64 * 1024,
         };
-        _watcher.Created += (_, e) => Handle(() => OnCreatedOrChanged(e.FullPath));
-        _watcher.Changed += (_, e) => Handle(() => OnCreatedOrChanged(e.FullPath));
+        // 생성은 트리 전체가 새로 나타날 수 있으므로(폴더 이동·이입) 하위까지 반영하고,
+        // 변경은 해당 항목만 갱신한다 — Changed는 자식 추가/삭제마다 부모 디렉터리에도 쏟아지므로
+        // 매번 하위를 재열거하면 대량 파일 작업에서 O(N^2)로 폭발한다.
+        _watcher.Created += (_, e) => Handle(() => OnCreated(e.FullPath));
+        _watcher.Changed += (_, e) => Handle(() => OnChanged(e.FullPath));
         _watcher.Deleted += (_, e) => Handle(() => _index.RemoveSubtree(e.FullPath));
         _watcher.Renamed += (_, e) => Handle(() => OnRenamed(e.OldFullPath, e.FullPath));
         _watcher.Error += (_, e) => OnError(e.GetException());
@@ -91,38 +94,17 @@ public sealed class FswIndexSource : IDisposable
         }
     }
 
-    private void OnCreatedOrChanged(string fullPath)
+    private void OnCreated(string fullPath)
     {
-        var parent = Path.GetDirectoryName(fullPath);
-        var name = Path.GetFileName(fullPath);
-        if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(name))
-        {
-            return;
-        }
-
         // 이벤트와 실제 상태 사이의 레이스 — 디스크의 현재 상태를 기준으로 반영한다.
-        if (Directory.Exists(fullPath))
-        {
-            _index.AddOrUpdate(new IndexItem(parent, name, IsDirectory: true, 0, 0));
-            return;
-        }
+        // 폴더가 내용과 함께 한 번에 나타나는 경우(이입/이동)를 위해 하위까지 재열거한다.
+        IndexPathUpdater.AddExistingPathTree(_index, fullPath, isDirectoryHint: false);
+    }
 
-        if (File.Exists(fullPath))
-        {
-            long size = 0;
-            long modified = 0;
-            try
-            {
-                var info = new FileInfo(fullPath);
-                size = info.Length;
-                modified = info.LastWriteTime.Ticks;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-            }
-
-            _index.AddOrUpdate(new IndexItem(parent, name, IsDirectory: false, size, modified));
-        }
+    private void OnChanged(string fullPath)
+    {
+        // 변경은 해당 항목만 갱신 — 디렉터리 하위는 다시 걷지 않는다.
+        IndexPathUpdater.AddSinglePath(_index, fullPath, isDirectoryHint: false);
     }
 
     private void OnRenamed(string oldFullPath, string newFullPath)
@@ -143,6 +125,6 @@ public sealed class FswIndexSource : IDisposable
 
         // 다른 폴더로의 이동으로 보고되는 경우 — 제거 후 재추가
         _index.RemoveSubtree(oldFullPath);
-        OnCreatedOrChanged(newFullPath);
+        IndexPathUpdater.AddExistingPathTree(_index, newFullPath, isDirectoryHint: Directory.Exists(newFullPath));
     }
 }

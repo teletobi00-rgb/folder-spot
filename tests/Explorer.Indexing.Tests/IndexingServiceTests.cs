@@ -20,7 +20,7 @@ public sealed class IndexingServiceTests : IAsyncDisposable
 
     public IndexingServiceTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), "ExplorerTests", Guid.NewGuid().ToString("N"));
+        _tempDir = Path.Combine(AppContext.BaseDirectory, "IndexingServiceTests", Guid.NewGuid().ToString("N"));
         _rootDir = Path.Combine(_tempDir, "root");
         Directory.CreateDirectory(_rootDir);
         _dbPath = Path.Combine(_tempDir, "index.db");

@@ -23,22 +23,31 @@ public enum UsnStartResult
 /// </summary>
 public sealed class UsnIndexSource : IDisposable
 {
+    private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan DefaultEnumerationInactivityTimeout = TimeSpan.FromMinutes(2);
+
     private readonly string _helperPath;
     private readonly ILogger _logger;
     private readonly Func<string, string, bool> _launcher;
+    private readonly TimeSpan _enumerationInactivityTimeout;
     private readonly CancellationTokenSource _shutdown = new();
     private NamedPipeServerStream? _server;
     private Process? _helper;
     private Task? _readLoop;
 
     /// <param name="launcher">파이프명/볼륨으로 헬퍼를 띄우고 성공 여부를 반환 (테스트 주입용, 기본은 UAC runas).</param>
-    public UsnIndexSource(string helperPath, ILogger logger, Func<string, string, bool>? launcher = null)
+    public UsnIndexSource(
+        string helperPath,
+        ILogger logger,
+        Func<string, string, bool>? launcher = null,
+        TimeSpan? enumerationInactivityTimeout = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(helperPath);
         ArgumentNullException.ThrowIfNull(logger);
         _helperPath = helperPath;
         _logger = logger;
         _launcher = launcher ?? LaunchHelperProcess;
+        _enumerationInactivityTimeout = enumerationInactivityTimeout ?? DefaultEnumerationInactivityTimeout;
     }
 
     public string? RootPath { get; private set; }
@@ -75,11 +84,32 @@ public sealed class UsnIndexSource : IDisposable
             }
 
             using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
-            connectCts.CancelAfter(TimeSpan.FromSeconds(15));
+            connectCts.CancelAfter(ConnectTimeout);
             await _server.WaitForConnectionAsync(connectCts.Token).ConfigureAwait(false);
 
-            _readLoop = Task.Run(() => ReadLoop(onBatch, onChange, enumComplete), CancellationToken.None);
-            return await enumComplete.Task.ConfigureAwait(false);
+            using var enumCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
+            enumCts.CancelAfter(_enumerationInactivityTimeout);
+
+            void ResetEnumerationWatchdog()
+            {
+                if (enumComplete.Task.IsCompleted)
+                {
+                    return;
+                }
+
+                try
+                {
+                    enumCts.CancelAfter(_enumerationInactivityTimeout);
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+            }
+
+            _readLoop = Task.Run(
+                () => ReadLoop(onBatch, onChange, enumComplete, ResetEnumerationWatchdog),
+                CancellationToken.None);
+            return await enumComplete.Task.WaitAsync(enumCts.Token).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException or Win32Exception)
         {
@@ -136,7 +166,8 @@ public sealed class UsnIndexSource : IDisposable
     private void ReadLoop(
         Action<IReadOnlyList<IndexItem>> onBatch,
         Action<UsnChange> onChange,
-        TaskCompletionSource<UsnStartResult> enumComplete)
+        TaskCompletionSource<UsnStartResult> enumComplete,
+        Action resetEnumerationWatchdog)
     {
         try
         {
@@ -149,6 +180,7 @@ public sealed class UsnIndexSource : IDisposable
                     break; // 파이프 끝
                 }
 
+                resetEnumerationWatchdog();
                 switch (message.Type)
                 {
                     case UsnMessageType.Batch:
@@ -168,6 +200,8 @@ public sealed class UsnIndexSource : IDisposable
                         _logger.LogWarning("권한 헬퍼 오류: {Error}", message.Error);
                         enumComplete.TrySetResult(UsnStartResult.Fallback);
                         return;
+                    case UsnMessageType.Heartbeat:
+                        break;
                 }
             }
         }

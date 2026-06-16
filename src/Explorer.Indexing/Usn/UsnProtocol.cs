@@ -31,6 +31,9 @@ public enum UsnMessageType : byte
 
     /// <summary>오류 보고.</summary>
     Error = 4,
+
+    /// <summary>긴 MFT 열거 중에도 메인 프로세스의 시작 감시 타이머를 갱신하기 위한 신호.</summary>
+    Heartbeat = 5,
 }
 
 /// <summary>헬퍼→메인 메시지 (수신 측 표현).</summary>
@@ -94,6 +97,12 @@ public static class UsnProtocol
         WriteString(writer, message);
     }
 
+    public static void WriteHeartbeat(BinaryWriter writer)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        writer.Write((byte)UsnMessageType.Heartbeat);
+    }
+
     /// <summary>다음 메시지를 읽는다. 스트림 끝이면 null.</summary>
     public static UsnMessage? Read(BinaryReader reader)
     {
@@ -116,6 +125,7 @@ public static class UsnProtocol
             UsnMessageType.EnumDone => new UsnMessage { Type = UsnMessageType.EnumDone, NextUsn = reader.ReadUInt64() },
             UsnMessageType.Change => ReadChange(reader),
             UsnMessageType.Error => new UsnMessage { Type = UsnMessageType.Error, Error = ReadString(reader) },
+            UsnMessageType.Heartbeat => new UsnMessage { Type = UsnMessageType.Heartbeat },
             _ => throw new InvalidDataException($"알 수 없는 USN 메시지 타입: {typeByte}"),
         };
     }

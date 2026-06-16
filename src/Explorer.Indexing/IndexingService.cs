@@ -287,7 +287,7 @@ public sealed class IndexingService : IHostedService, IDisposable
         {
             var result = await source.StartAsync(
                 root,
-                rebuilt.AddBatch,
+                items => rebuilt.AddBatch(IndexPathUpdater.FilterExcluded(items)),
                 change => ApplyChange(rebuilt, change),
                 ct).ConfigureAwait(false);
 
@@ -331,8 +331,13 @@ public sealed class IndexingService : IHostedService, IDisposable
     {
         switch (change.Kind)
         {
-            case FileChangeKind.Created or FileChangeKind.Modified:
-                AddPath(index, change.FullPath, change.IsDirectory);
+            case FileChangeKind.Created:
+                // 생성은 트리 전체가 새로 나타날 수 있어 하위까지 반영한다.
+                IndexPathUpdater.AddExistingPathTree(index, change.FullPath, change.IsDirectory);
+                break;
+            case FileChangeKind.Modified:
+                // 변경은 해당 항목만 — 디렉터리 하위 재열거 폭주를 피한다.
+                IndexPathUpdater.AddSinglePath(index, change.FullPath, change.IsDirectory);
                 break;
             case FileChangeKind.Deleted:
                 index.RemoveSubtree(change.FullPath);
@@ -356,26 +361,9 @@ public sealed class IndexingService : IHostedService, IDisposable
             return;
         }
 
-        // 다른 폴더로의 이동: 옛 위치를 제거하고 새 위치를 추가한다.
-        // (디렉터리 이동 시 하위 항목은 다음 전체 재구축까지 갱신되지 않는 알려진 한계.)
+        // 다른 폴더로의 이동: 옛 위치를 제거하고 새 위치의 현재 트리를 다시 반영한다.
         index.RemoveSubtree(oldPath);
-        AddPath(index, newPath, isDirectory);
-    }
-
-    private static void AddPath(FileIndex index, string fullPath, bool isDirectory)
-    {
-        // 증분(FSW/USN)도 스캔과 동일하게 정크 트리는 인덱싱하지 않는다.
-        if (IndexExclusions.IsExcludedPath(fullPath))
-        {
-            return;
-        }
-
-        var parent = Path.GetDirectoryName(fullPath);
-        var name = Path.GetFileName(fullPath);
-        if (!string.IsNullOrEmpty(parent) && name.Length > 0)
-        {
-            index.AddOrUpdate(new IndexItem(parent, name, isDirectory, 0, 0));
-        }
+        IndexPathUpdater.AddExistingPathTree(index, newPath, isDirectory);
     }
 
     private void StartWatcher(string root)

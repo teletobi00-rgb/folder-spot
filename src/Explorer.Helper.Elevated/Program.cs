@@ -86,11 +86,19 @@ static void EnumerateAndStreamMft(
     CancellationToken ct)
 {
     var resolver = new MftPathResolver(rootFrn, volumeRoot);
+    var lastHeartbeat = DateTime.UtcNow;
     foreach (var record in reader.EnumerateMft(ct))
     {
         tracker.Seed(record);
         resolver.Add(new MftRecord(
             record.FileReferenceNumber, record.ParentFileReferenceNumber, record.Name, record.IsDirectory));
+
+        if (DateTime.UtcNow - lastHeartbeat >= TimeSpan.FromSeconds(2))
+        {
+            UsnProtocol.WriteHeartbeat(writer);
+            writer.Flush();
+            lastHeartbeat = DateTime.UtcNow;
+        }
     }
 
     var batch = new List<IndexItem>(8192);

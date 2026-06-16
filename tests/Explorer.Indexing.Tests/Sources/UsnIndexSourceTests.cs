@@ -148,4 +148,67 @@ public sealed class UsnIndexSourceTests
 
         result.Should().Be(UsnStartResult.Fallback);
     }
+
+    [Fact]
+    public async Task ConnectedHelperWithoutMessages_TimesOutToFallback()
+    {
+        using var hold = new CancellationTokenSource();
+        var launcher = new Func<string, string, bool>((pipeName, volume) =>
+        {
+            _ = Task.Run(async () =>
+            {
+                using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.Out);
+                await client.ConnectAsync(5000);
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, hold.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            });
+            return true;
+        });
+
+        using var source = new UsnIndexSource(
+            "fake.exe",
+            NullLogger<UsnIndexSource>.Instance,
+            launcher,
+            TimeSpan.FromMilliseconds(100));
+
+        var result = await source.StartAsync(@"C:\", _ => { }, _ => { }, CancellationToken.None);
+
+        result.Should().Be(UsnStartResult.Fallback);
+        hold.Cancel();
+    }
+
+    [Fact]
+    public async Task Heartbeat_KeepsEnumerationWaitAliveUntilEnumDone()
+    {
+        var launcher = new Func<string, string, bool>((pipeName, volume) =>
+        {
+            _ = Task.Run(async () =>
+            {
+                using var client = new NamedPipeClientStream(".", pipeName, PipeDirection.Out);
+                await client.ConnectAsync(5000);
+                using var writer = new BinaryWriter(client, Encoding.UTF8, leaveOpen: true);
+                UsnProtocol.WriteHeartbeat(writer);
+                writer.Flush();
+                await Task.Delay(80);
+                UsnProtocol.WriteEnumDone(writer, 1);
+                writer.Flush();
+            });
+            return true;
+        });
+
+        using var source = new UsnIndexSource(
+            "fake.exe",
+            NullLogger<UsnIndexSource>.Instance,
+            launcher,
+            TimeSpan.FromMilliseconds(120));
+
+        var result = await source.StartAsync(@"C:\", _ => { }, _ => { }, CancellationToken.None);
+
+        result.Should().Be(UsnStartResult.Enumerated);
+    }
 }

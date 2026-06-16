@@ -15,7 +15,7 @@ public sealed class FswIndexSourceTests : IDisposable
 
     public FswIndexSourceTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "ExplorerTests", Guid.NewGuid().ToString("N"));
+        _root = Path.Combine(AppContext.BaseDirectory, "FswTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
         _source = new FswIndexSource(
             _index, _rescanRequests.Add, NullLogger<FswIndexSource>.Instance);

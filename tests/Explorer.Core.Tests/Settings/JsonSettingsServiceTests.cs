@@ -40,7 +40,7 @@ public sealed class JsonSettingsServiceTests : IDisposable
     {
         var service = CreateService();
 
-        service.Current.Should().Be(new AppSettings());
+        service.Current.Should().BeEquivalentTo(new AppSettings());
         service.Current.SchemaVersion.Should().Be(AppSettings.CurrentSchemaVersion);
         service.Current.Theme.Should().Be(AppTheme.System);
     }
@@ -52,7 +52,7 @@ public sealed class JsonSettingsServiceTests : IDisposable
 
         service.Load();
 
-        service.Current.Should().Be(new AppSettings());
+        service.Current.Should().BeEquivalentTo(new AppSettings());
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public sealed class JsonSettingsServiceTests : IDisposable
 
         service.Load();
 
-        service.Current.Should().Be(new AppSettings());
+        service.Current.Should().BeEquivalentTo(new AppSettings());
         File.Exists(_settingsFile + ".bak").Should().BeTrue();
     }
 
@@ -101,7 +101,7 @@ public sealed class JsonSettingsServiceTests : IDisposable
         var reloaded = CreateService();
         reloaded.Load();
 
-        reloaded.Current.Should().Be(new AppSettings { Theme = AppTheme.Light, ShowHiddenFiles = true });
+        reloaded.Current.Should().BeEquivalentTo(new AppSettings { Theme = AppTheme.Light, ShowHiddenFiles = true });
     }
 
     [Fact]

@@ -99,6 +99,18 @@ public sealed class UsnProtocolTests
     }
 
     [Fact]
+    public void Heartbeat_Roundtrips()
+    {
+        var (writer, stream) = NewWriter();
+        UsnProtocol.WriteHeartbeat(writer);
+        writer.Flush();
+
+        var message = UsnProtocol.Read(ReaderOver(stream));
+
+        message!.Type.Should().Be(UsnMessageType.Heartbeat);
+    }
+
+    [Fact]
     public void Read_EmptyStream_ReturnsNull()
     {
         UsnProtocol.Read(ReaderOver(new MemoryStream())).Should().BeNull();

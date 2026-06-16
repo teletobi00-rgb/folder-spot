@@ -24,6 +24,16 @@ public sealed class RecursiveScanSource
     public Task<long> ScanAsync(
         string rootPath,
         Action<IReadOnlyList<IndexItem>> onBatch,
+        CancellationToken cancellationToken = default) =>
+        ScanAsync(rootPath, onBatch, long.MaxValue, cancellationToken);
+
+    /// <summary>
+    /// 루트를 스캔하되 <paramref name="maxItems"/>에 도달하면 그 자리에서 멈춘다(대용량 네트워크 드라이브 폭주 방지).
+    /// </summary>
+    public Task<long> ScanAsync(
+        string rootPath,
+        Action<IReadOnlyList<IndexItem>> onBatch,
+        long maxItems,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rootPath);
@@ -68,6 +78,11 @@ public sealed class RecursiveScanSource
                 {
                     onBatch(batch);
                     batch = new List<IndexItem>(BatchSize);
+                }
+
+                if (total >= maxItems)
+                {
+                    break;
                 }
             }
 

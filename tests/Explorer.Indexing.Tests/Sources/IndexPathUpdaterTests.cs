@@ -81,6 +81,45 @@ public sealed class IndexPathUpdaterTests : IDisposable
     }
 
     [Fact]
+    public void AddSinglePath_MissingPath_RemovesExistingEntry()
+    {
+        var path = Path.Combine(_root, "ghost.txt");
+        using var index = new FileIndex();
+        IndexPathUpdater.AddKnownPath(index, path, isDirectory: false);
+
+        var updated = IndexPathUpdater.AddSinglePath(index, path, isDirectoryHint: false);
+
+        updated.Should().BeFalse();
+        index.Search("ghost", 10).Should().BeEmpty("늦은 Changed 이벤트가 삭제된 파일을 되살리면 안 된다");
+    }
+
+    [Fact]
+    public void AddExistingPathTree_MissingPath_RemovesExistingTree()
+    {
+        var dir = Path.Combine(_root, "gone");
+        using var index = new FileIndex();
+        IndexPathUpdater.AddKnownPath(index, dir, isDirectory: true);
+        IndexPathUpdater.AddKnownPath(index, Path.Combine(dir, "child.txt"), isDirectory: false);
+
+        var updated = IndexPathUpdater.AddExistingPathTree(index, dir, isDirectoryHint: true);
+
+        updated.Should().BeFalse();
+        index.Search("gone", 10).Should().BeEmpty();
+        index.Search("child", 10).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void AddKnownPath_MissingPath_CanSeedTrustedEventPath()
+    {
+        var path = Path.Combine(_root, "known-from-journal.txt");
+        using var index = new FileIndex();
+
+        IndexPathUpdater.AddKnownPath(index, path, isDirectory: false);
+
+        index.Search("known-from-journal", 10).Should().ContainSingle();
+    }
+
+    [Fact]
     public void AddExistingPathTree_ExcludedDirectory_DoesNotIndexTree()
     {
         var ignored = Path.Combine(_root, "node_modules");

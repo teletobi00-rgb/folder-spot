@@ -24,60 +24,62 @@ internal static class IndexPathUpdater
     }
 
     /// <summary>
-    /// 경로 하위 트리를 인덱스에 반영한다 — 디렉터리면 재귀 열거까지. <b>생성/이동</b>처럼
+    /// 경로 하위 트리를 현재 디스크 상태 기준으로 인덱스에 반영한다 — 디렉터리면 재귀 열거까지. <b>생성/이동</b>처럼
     /// 트리 전체가 새로 나타날 수 있는 경우에만 쓴다(변경 이벤트엔 <see cref="AddSinglePath"/> 사용).
     /// </summary>
-    public static void AddExistingPathTree(IFileIndex index, string fullPath, bool isDirectoryHint)
+    public static bool AddExistingPathTree(IFileIndex index, string fullPath, bool isDirectoryHint)
     {
         ArgumentNullException.ThrowIfNull(index);
 
         if (IndexExclusions.IsExcludedPath(fullPath))
         {
-            return;
+            return false;
         }
 
         if (Directory.Exists(fullPath))
         {
             AddKnownPath(index, fullPath, isDirectory: true);
             AddDirectoryChildren(index, fullPath);
-            return;
+            return true;
         }
 
         if (File.Exists(fullPath))
         {
             AddFile(index, fullPath);
-            return;
+            return true;
         }
 
-        AddKnownPath(index, fullPath, isDirectoryHint);
+        index.RemoveSubtree(fullPath);
+        return false;
     }
 
     /// <summary>
-    /// 경로 한 건만 반영한다 — <b>재귀 없음</b>. 변경(Changed/Modified) 이벤트용:
+    /// 경로 한 건만 현재 디스크 상태 기준으로 반영한다 — <b>재귀 없음</b>. 변경(Changed/Modified) 이벤트용:
     /// 디렉터리 자식 추가/삭제는 각자 자기 이벤트로 처리되므로 부모 트리를 다시 걷지 않는다.
     /// </summary>
-    public static void AddSinglePath(IFileIndex index, string fullPath, bool isDirectoryHint)
+    public static bool AddSinglePath(IFileIndex index, string fullPath, bool isDirectoryHint)
     {
         ArgumentNullException.ThrowIfNull(index);
 
         if (IndexExclusions.IsExcludedPath(fullPath))
         {
-            return;
+            return false;
         }
 
         if (Directory.Exists(fullPath))
         {
             AddKnownPath(index, fullPath, isDirectory: true);
-            return;
+            return true;
         }
 
         if (File.Exists(fullPath))
         {
             AddFile(index, fullPath);
-            return;
+            return true;
         }
 
-        AddKnownPath(index, fullPath, isDirectoryHint);
+        index.RemoveSubtree(fullPath);
+        return false;
     }
 
     public static void AddKnownPath(IFileIndex index, string fullPath, bool isDirectory)

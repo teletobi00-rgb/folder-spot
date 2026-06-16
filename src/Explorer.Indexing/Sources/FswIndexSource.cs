@@ -98,7 +98,7 @@ public sealed class FswIndexSource : IDisposable
     {
         // 이벤트와 실제 상태 사이의 레이스 — 디스크의 현재 상태를 기준으로 반영한다.
         // 폴더가 내용과 함께 한 번에 나타나는 경우(이입/이동)를 위해 하위까지 재열거한다.
-        IndexPathUpdater.AddExistingPathTree(_index, fullPath, isDirectoryHint: false);
+        RetryIfPathNotReady(() => IndexPathUpdater.AddExistingPathTree(_index, fullPath, isDirectoryHint: false));
     }
 
     private void OnChanged(string fullPath)
@@ -125,6 +125,18 @@ public sealed class FswIndexSource : IDisposable
 
         // 다른 폴더로의 이동으로 보고되는 경우 — 제거 후 재추가
         _index.RemoveSubtree(oldFullPath);
-        IndexPathUpdater.AddExistingPathTree(_index, newFullPath, isDirectoryHint: Directory.Exists(newFullPath));
+        RetryIfPathNotReady(() =>
+            IndexPathUpdater.AddExistingPathTree(_index, newFullPath, isDirectoryHint: Directory.Exists(newFullPath)));
+    }
+
+    private static void RetryIfPathNotReady(Func<bool> update)
+    {
+        if (update())
+        {
+            return;
+        }
+
+        Thread.Sleep(50);
+        update();
     }
 }

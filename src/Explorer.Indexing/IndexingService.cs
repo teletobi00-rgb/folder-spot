@@ -13,19 +13,138 @@ namespace Explorer.Indexing;
 /// <summary>검색이 쓰는 "현재 인덱스" 핸들 — 재구축 완료 시 원자적으로 교체된다.</summary>
 public sealed class FileIndexCatalog : IDisposable
 {
-    private volatile FileIndex _current = new();
+    private readonly Lock _gate = new();
+    private Entry _current = new(new FileIndex());
+    private bool _disposed;
 
-    public FileIndex Current => _current;
-
-    /// <summary>새 인덱스로 교체하고 이전 인덱스를 돌려준다 (호출자가 폐기).</summary>
-    public FileIndex Swap(FileIndex next)
+    /// <summary>
+    /// 현재 인덱스 원본 참조. 즉시 끝나는 테스트/초기화용이며, 비동기 작업은 <see cref="Acquire"/>를 사용한다.
+    /// </summary>
+    public FileIndex Current
     {
-        ArgumentNullException.ThrowIfNull(next);
-        var previous = Interlocked.Exchange(ref _current, next);
-        return previous;
+        get
+        {
+            lock (_gate)
+            {
+                ThrowIfDisposed();
+                return _current.Index;
+            }
+        }
     }
 
-    public void Dispose() => _current.Dispose();
+    public int Count
+    {
+        get
+        {
+            using var lease = Acquire();
+            return lease.Index.Count;
+        }
+    }
+
+    public Lease Acquire()
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            _current.RefCount++;
+            return new Lease(this, _current);
+        }
+    }
+
+    /// <summary>새 인덱스로 교체한다. 이전 인덱스는 진행 중인 lease가 모두 끝난 뒤 폐기된다.</summary>
+    public void Swap(FileIndex next)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+        Entry previous;
+        var disposePrevious = false;
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            previous = _current;
+            _current = new Entry(next);
+            previous.Retired = true;
+            disposePrevious = previous.RefCount == 0;
+        }
+
+        if (disposePrevious)
+        {
+            previous.Index.Dispose();
+        }
+    }
+
+    public void Dispose()
+    {
+        Entry current;
+        var disposeCurrent = false;
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            current = _current;
+            current.Retired = true;
+            disposeCurrent = current.RefCount == 0;
+        }
+
+        if (disposeCurrent)
+        {
+            current.Index.Dispose();
+        }
+    }
+
+    private void Release(Entry entry)
+    {
+        var dispose = false;
+        lock (_gate)
+        {
+            if (entry.RefCount == 0)
+            {
+                return;
+            }
+
+            entry.RefCount--;
+            dispose = entry.Retired && entry.RefCount == 0;
+        }
+
+        if (dispose)
+        {
+            entry.Index.Dispose();
+        }
+    }
+
+    private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
+
+    internal sealed class Entry(FileIndex index)
+    {
+        public FileIndex Index { get; } = index;
+
+        public int RefCount { get; set; }
+
+        public bool Retired { get; set; }
+    }
+
+    public sealed class Lease : IDisposable
+    {
+        private FileIndexCatalog? _owner;
+        private readonly Entry _entry;
+
+        internal Lease(FileIndexCatalog owner, Entry entry)
+        {
+            _owner = owner;
+            _entry = entry;
+        }
+
+        public FileIndex Index => _entry.Index;
+
+        public void Dispose()
+        {
+            var owner = Interlocked.Exchange(ref _owner, null);
+            owner?.Release(_entry);
+        }
+    }
 }
 
 /// <summary>인덱싱 대상/동작 옵션 (테스트와 진단용 오버라이드 지원).</summary>
@@ -55,6 +174,12 @@ public sealed record IndexingOptions
     /// </summary>
     public TimeSpan? StartupRescanSkipMaxAge { get; init; } = TimeSpan.FromHours(6);
 
+    /// <summary>네트워크 드라이브 한 곳당 인덱싱 항목 상한 — 대용량 NAS가 메모리를 폭주시키지 않게 한다.</summary>
+    public long NetworkScanMaxItems { get; init; } = 100_000;
+
+    /// <summary>네트워크 드라이브 한 곳당 스캔 시간 예산 — 느린 NAS가 시작을 막지 않게 한다(초과 시 일부만).</summary>
+    public TimeSpan NetworkScanTimeBudget { get; init; } = TimeSpan.FromSeconds(60);
+
     public static IndexingOptions FromEnvironment() => new()
     {
         Disabled = Environment.GetEnvironmentVariable("EXPLORER_DISABLE_INDEXING") == "1",
@@ -77,7 +202,7 @@ public sealed class IndexingService : IHostedService, IDisposable
     private readonly IndexingOptions _options;
     private readonly ILogger<IndexingService> _logger;
     private readonly CancellationTokenSource _shutdown = new();
-    private readonly List<FswIndexSource> _watchers = [];
+    private readonly List<ActiveWatcher> _watchers = [];
     private readonly List<UsnIndexSource> _usnSources = [];
     private readonly Lock _rescanGate = new();
     private readonly Lock _saveGate = new();
@@ -161,7 +286,7 @@ public sealed class IndexingService : IHostedService, IDisposable
             var restored = _snapshot.TryLoad();
             if (restored is not null)
             {
-                _catalog.Swap(restored).Dispose();
+                _catalog.Swap(restored);
                 _logger.LogInformation("인덱스 스냅샷 복원: {Count:N0}개 항목 — 즉시 검색 가능", restored.Count);
             }
 
@@ -179,7 +304,7 @@ public sealed class IndexingService : IHostedService, IDisposable
             {
                 _logger.LogInformation(
                     "스냅샷이 최신 — 시작 전체 재스캔 생략, FSW 증분 감시만 시작 ({Count:N0}개 항목)",
-                    _catalog.Current.Count);
+                    _catalog.Count);
                 watchRoots = roots;
             }
             else
@@ -196,7 +321,7 @@ public sealed class IndexingService : IHostedService, IDisposable
             _snapshotTimer = new Timer(
                 _ => SaveSnapshotIfDirty(), null, _options.SnapshotInterval, _options.SnapshotInterval);
 
-            Status = $"감시 중 ({_catalog.Current.Count:N0}개 항목)";
+            Status = $"감시 중 ({_catalog.Count:N0}개 항목)";
             _logger.LogInformation("인덱싱 파이프라인 가동: {Status}", Status);
 
             // 재스캔 요청(FSW 오버플로) 처리 루프
@@ -267,14 +392,24 @@ public sealed class IndexingService : IHostedService, IDisposable
         return age >= TimeSpan.Zero && age <= maxAge;
     }
 
-    /// <summary>전체 재구축. USN 고속 경로/재귀 폴백을 볼륨별로 선택하고, FSW가 필요한 폴백 볼륨 목록을 돌려준다.</summary>
+    /// <summary>
+    /// 전체 재구축. <b>로컬(고정) 드라이브를 먼저</b> 스캔·교체해 즉시 검색되게 하고,
+    /// 네트워크 드라이브는 살아있는 인덱스에 상한(노드 수·시간)을 두고 추가한다(대용량 NAS가 앱을 막지 않게).
+    /// FSW가 필요한 폴백 볼륨 목록을 돌려준다.
+    /// </summary>
     private async Task<IReadOnlyList<string>> RescanAllAsync(IReadOnlyList<string> roots, CancellationToken ct)
     {
         var rebuilt = new FileIndex();
         var fallbackRoots = new List<string>();
         var helperAvailable = _options.HelperPath is { } hp && UsnIndexSource.HelperExists(hp);
 
-        foreach (var root in roots)
+        var fixedRoots = roots.Where(r => DriveKindOf(r) != DriveKind.Network).ToList();
+        var networkRoots = roots.Where(r => DriveKindOf(r) == DriveKind.Network).ToList();
+
+        // 1) 로컬(고정) 드라이브 — USN 고속 또는 재귀 폴백.
+        //    동시성: 앞 볼륨의 tailing(AddOrUpdate)과 뒤 볼륨의 열거(AddBatch)가 같은 rebuilt를
+        //    동시에 쓸 수 있으나, FileIndex의 모든 변경이 쓰기 락을 잡아 직렬화된다(검색 읽기 락과도 안전).
+        foreach (var root in fixedRoots)
         {
             var mode = IndexSourceSelector.Select(
                 DriveKindOf(root),
@@ -282,11 +417,6 @@ public sealed class IndexingService : IHostedService, IDisposable
                 _options.FastIndexingEnabled,
                 helperAvailable);
 
-            // onChange는 재구축 인덱스를 직접 겨냥한다 — 스왑 후 이 인덱스가 곧 current가 되므로
-            // tailing 델타가 일관되게 반영된다.
-            // 동시성: 앞 볼륨의 tailing(ApplyChange→AddOrUpdate)과 뒤 볼륨의 열거(AddBatch)가
-            // 같은 rebuilt를 동시에 쓸 수 있다. FileIndex의 모든 변경 경로가 쓰기 락을 잡으므로
-            // 직렬화되어 데이터 손상은 없다(검색의 읽기 락과도 안전).
             if (mode == IndexSourceMode.UsnFast
                 && await TryUsnRescanAsync(root, rebuilt, ct).ConfigureAwait(false))
             {
@@ -297,15 +427,55 @@ public sealed class IndexingService : IHostedService, IDisposable
             fallbackRoots.Add(root);
         }
 
-        _catalog.Swap(rebuilt).Dispose();
+        // 2) 로컬 인덱스를 먼저 원자 교체 — 네트워크 스캔을 기다리지 않고 여기서부터 로컬 검색이 동작한다.
+        _catalog.Swap(rebuilt);
         _dirty = true;
-        _logger.LogInformation("인덱스 재구축 완료: {Total:N0}개 항목 (USN {Usn}개 볼륨)",
+        _logger.LogInformation("로컬 인덱스 재구축 완료: {Total:N0}개 항목 (USN {Usn}개 볼륨)",
             rebuilt.Count, _usnSources.Count);
         SaveSnapshotIfDirty();
-
-        // 재구축으로 버려진 이전 인덱스(대형 LOH 배열)와 스캔 중 생긴 가비지를 OS에 반환한다.
         TrimMemory();
+
+        // 3) 네트워크 드라이브는 살아있는 인덱스에 상한을 두고 추가(폭주·지연 방지).
+        foreach (var root in networkRoots)
+        {
+            await RescanNetworkRootAsync(root, rebuilt, ct).ConfigureAwait(false);
+            fallbackRoots.Add(root);
+        }
+
+        if (networkRoots.Count > 0)
+        {
+            _dirty = true;
+            SaveSnapshotIfDirty();
+            TrimMemory();
+        }
+
         return fallbackRoots;
+    }
+
+    /// <summary>네트워크 드라이브를 노드 수·시간 상한을 두고 인덱스에 추가한다. 상한 초과 시 일부만(앱은 정상).</summary>
+    private async Task RescanNetworkRootAsync(string root, FileIndex index, CancellationToken ct)
+    {
+        Status = $"네트워크 인덱싱: {root}";
+        _logger.LogInformation(
+            "네트워크 드라이브 인덱싱 시작(상한 {Max:N0}개 / {Sec:N0}s): {Root}",
+            _options.NetworkScanMaxItems, _options.NetworkScanTimeBudget.TotalSeconds, root);
+
+        using var budgetCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budgetCts.CancelAfter(_options.NetworkScanTimeBudget);
+        try
+        {
+            await _scanner.ScanAsync(root, index.AddBatch, _options.NetworkScanMaxItems, budgetCts.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            // 시간 예산 초과 — 일부만 인덱싱된 채 중단한다(로컬 검색은 이미 동작 중).
+            _logger.LogWarning("네트워크 인덱싱 시간 예산 초과 — 일부만 인덱싱: {Root}", root);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+        {
+            _logger.LogWarning(ex, "네트워크 인덱싱 실패 — 건너뜀: {Root}", root);
+        }
     }
 
     /// <summary>대규모 재구축 직후 LOH 압축 + 워킹셋 트림으로 메모리를 OS에 반환한다(백그라운드 스레드에서만 호출).</summary>
@@ -410,10 +580,12 @@ public sealed class IndexingService : IHostedService, IDisposable
 
     private void StartWatcher(string root)
     {
+        FileIndexCatalog.Lease? lease = null;
         try
         {
+            lease = _catalog.Acquire();
             var watcher = new FswIndexSource(
-                _catalog.Current,
+                lease.Index,
                 rescanRoot =>
                 {
                     lock (_rescanGate)
@@ -424,10 +596,12 @@ public sealed class IndexingService : IHostedService, IDisposable
                 LoggerShim.For<FswIndexSource>(_logger),
                 onChanged: () => _dirty = true);
             watcher.Start(root);
-            _watchers.Add(watcher);
+            _watchers.Add(new ActiveWatcher(watcher, lease));
+            lease = null;
         }
         catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
         {
+            lease?.Dispose();
             _logger.LogWarning(ex, "감시 시작 실패: {Root}", root);
         }
     }
@@ -467,7 +641,8 @@ public sealed class IndexingService : IHostedService, IDisposable
             }
 
             _dirty = false;
-            if (!_snapshot.TrySave(_catalog.Current))
+            using var lease = _catalog.Acquire();
+            if (!_snapshot.TrySave(lease.Index))
             {
                 _dirty = true;
             }
@@ -489,6 +664,15 @@ public sealed class IndexingService : IHostedService, IDisposable
         }
 
         _usnSources.Clear();
+    }
+
+    private sealed class ActiveWatcher(FswIndexSource source, FileIndexCatalog.Lease indexLease) : IDisposable
+    {
+        public void Dispose()
+        {
+            source.Dispose();
+            indexLease.Dispose();
+        }
     }
 
     /// <summary>카테고리만 다른 로거 어댑터 (DI 밖에서 워처를 만들 때 사용).</summary>

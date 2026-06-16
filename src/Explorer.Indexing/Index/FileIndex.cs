@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 
 namespace Explorer.Indexing.Index;
 
@@ -56,6 +57,7 @@ public sealed class FileIndex : IFileIndex, IDisposable
     private struct Node
     {
         public string Name;
+        public string SearchName;
         public int ParentId;
         public long Size;
         public long ModifiedTicks;
@@ -116,13 +118,13 @@ public sealed class FileIndex : IFileIndex, IDisposable
                     continue;
                 }
 
-                if (!node.Name.Contains(normalized, StringComparison.OrdinalIgnoreCase))
+                if (!node.SearchName.Contains(normalized, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
 
-                var rank = string.Equals(node.Name, normalized, StringComparison.OrdinalIgnoreCase) ? 0
-                    : node.Name.StartsWith(normalized, StringComparison.OrdinalIgnoreCase) ? 1
+                var rank = string.Equals(node.SearchName, normalized, StringComparison.OrdinalIgnoreCase) ? 0
+                    : node.SearchName.StartsWith(normalized, StringComparison.OrdinalIgnoreCase) ? 1
                     : 2;
                 matches.Add((id, rank));
             }
@@ -184,7 +186,7 @@ public sealed class FileIndex : IFileIndex, IDisposable
             RemoveNodeRecursive(nodeId);
             if (_children.TryGetValue(parentId, out var siblings))
             {
-                siblings.Remove(name);
+            siblings.Remove(NameKey(name));
             }
         }
         finally
@@ -206,17 +208,18 @@ public sealed class FileIndex : IFileIndex, IDisposable
             }
 
             var siblings = _children[parentId];
-            siblings.Remove(oldName);
+            siblings.Remove(NameKey(oldName));
 
             // 같은 이름이 이미 있으면(드문 레이스) 기존 항목을 대체한다.
-            if (siblings.TryGetValue(newName, out var existingId))
+            if (siblings.TryGetValue(NameKey(newName), out var existingId))
             {
                 RemoveNodeRecursive(existingId);
             }
 
-            siblings[newName] = nodeId;
+            siblings[NameKey(newName)] = nodeId;
             var node = _nodes[nodeId];
             node.Name = newName;
+            node.SearchName = NormalizeName(newName);
             _nodes[nodeId] = node;
         }
         finally
@@ -263,7 +266,7 @@ public sealed class FileIndex : IFileIndex, IDisposable
         {
             while (_nodes.Count < originalId)
             {
-                _nodes.Add(new Node { Name = string.Empty, ParentId = -1, Deleted = true });
+                _nodes.Add(new Node { Name = string.Empty, SearchName = string.Empty, ParentId = -1, Deleted = true });
             }
 
             if (_nodes.Count != originalId)
@@ -275,12 +278,13 @@ public sealed class FileIndex : IFileIndex, IDisposable
             _nodes.Add(new Node
             {
                 Name = name,
+                SearchName = NormalizeName(name),
                 ParentId = parentId,
                 Size = size,
                 ModifiedTicks = modifiedTicks,
                 IsDirectory = isDirectory,
             });
-            GetChildren(parentId)[name] = originalId;
+            GetChildren(parentId)[NameKey(name)] = originalId;
             _liveCount++;
         }
         finally
@@ -292,14 +296,18 @@ public sealed class FileIndex : IFileIndex, IDisposable
     public void Dispose() => _lock.Dispose();
 
     private static string NormalizeQuery(string? query) =>
-        string.IsNullOrWhiteSpace(query) ? string.Empty : query.Trim().Normalize();
+        string.IsNullOrWhiteSpace(query) ? string.Empty : query.Trim().Normalize(NormalizationForm.FormC);
+
+    private static string NormalizeName(string name) => name.Normalize(NormalizationForm.FormC);
+
+    private static string NameKey(string name) => NormalizeName(name);
 
     private void AddOrUpdateCore(in IndexItem item)
     {
         var parentId = EnsureDirectoryChain(item.ParentPath);
         var siblings = GetChildren(parentId);
 
-        if (siblings.TryGetValue(item.Name, out var existingId))
+        if (siblings.TryGetValue(NameKey(item.Name), out var existingId))
         {
             var node = _nodes[existingId];
             node.Size = item.Size;
@@ -334,7 +342,7 @@ public sealed class FileIndex : IFileIndex, IDisposable
     private int EnsureChild(int parentId, string name, bool isDirectory)
     {
         var siblings = GetChildren(parentId);
-        if (siblings.TryGetValue(name, out var existing))
+        if (siblings.TryGetValue(NameKey(name), out var existing))
         {
             return existing;
         }
@@ -348,12 +356,13 @@ public sealed class FileIndex : IFileIndex, IDisposable
         _nodes.Add(new Node
         {
             Name = name,
+            SearchName = NormalizeName(name),
             ParentId = parentId,
             Size = size,
             ModifiedTicks = modifiedTicks,
             IsDirectory = isDirectory,
         });
-        GetChildren(parentId)[name] = id;
+        GetChildren(parentId)[NameKey(name)] = id;
         _liveCount++;
         return id;
     }
@@ -409,7 +418,7 @@ public sealed class FileIndex : IFileIndex, IDisposable
     private bool TryGetChild(int parentId, string name, out int nodeId)
     {
         nodeId = -1;
-        return _children.TryGetValue(parentId, out var siblings) && siblings.TryGetValue(name, out nodeId);
+        return _children.TryGetValue(parentId, out var siblings) && siblings.TryGetValue(NameKey(name), out nodeId);
     }
 
     private void RemoveNodeRecursive(int nodeId)

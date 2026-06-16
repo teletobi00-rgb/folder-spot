@@ -156,7 +156,7 @@ public sealed partial class SearchPopupViewModel : ObservableObject
     /// <summary>팝업이 표시될 때 호출 — 직전 질의를 다시 보여주되 전체 선택 상태로.</summary>
     public void OnShown()
     {
-        StatusText = $"{_catalog.Current.Count:N0}개 항목 인덱싱됨";
+        StatusText = $"{_catalog.Count:N0}개 항목 인덱싱됨";
     }
 
     async partial void OnQueryChanged(string value)
@@ -180,8 +180,13 @@ public sealed partial class SearchPopupViewModel : ObservableObject
         {
             await Task.Delay(DebounceMilliseconds, ct).ConfigureAwait(true);
 
-            var index = _catalog.Current;
-            var fileHits = await Task.Run(() => index.Search(value, MaxResults, ct), ct).ConfigureAwait(true);
+            IReadOnlyList<SearchHit> fileHits;
+            using (var lease = _catalog.Acquire())
+            {
+                var index = lease.Index;
+                fileHits = await Task.Run(() => index.Search(value, MaxResults, ct), ct).ConfigureAwait(true);
+            }
+
             var appHits = await _apps.SearchAsync(value, MaxResults, ct).ConfigureAwait(true);
             ct.ThrowIfCancellationRequested();
 

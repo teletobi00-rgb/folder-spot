@@ -36,6 +36,15 @@ public sealed class FileIndexTests : IDisposable
     }
 
     [Fact]
+    public void Search_NormalizesComposedQueryAgainstDecomposedName()
+    {
+        Add(@"C:\문서", "\u1100\u1161.txt");
+
+        _index.Search("\uAC00", 10).Should().ContainSingle()
+            .Which.FullPath.Should().Be(@"C:\문서\가.txt");
+    }
+
+    [Fact]
     public void Search_MixedKoreanEnglish_Matches()
     {
         Add(@"C:\작업", "Project계획서_v2.xlsx");

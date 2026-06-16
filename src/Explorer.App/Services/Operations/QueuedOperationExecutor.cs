@@ -58,8 +58,10 @@ public sealed class QueuedOperationExecutor : IQueuedOperationExecutor
 
         // 1) 충돌 사전 검사 + 사용자 결정
         var conflicts = ConflictScanner.Scan(request.Sources, destination);
+        var conflictSources = conflicts.Select(c => c.SourcePath).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var skipped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var keepBoth = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var overwrite = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         if (conflicts.Count > 0)
         {
@@ -69,10 +71,18 @@ public sealed class QueuedOperationExecutor : IQueuedOperationExecutor
                 return FileOperationResult.Cancelled();
             }
 
-            foreach (var (conflict, decision) in decisions)
+            foreach (var conflict in conflicts)
             {
+                if (!decisions.TryGetValue(conflict, out var decision))
+                {
+                    return FileOperationResult.Cancelled();
+                }
+
                 switch (decision)
                 {
+                    case ConflictDecision.Overwrite:
+                        overwrite.Add(conflict.SourcePath);
+                        break;
                     case ConflictDecision.Skip:
                         skipped.Add(conflict.SourcePath);
                         break;
@@ -83,13 +93,16 @@ public sealed class QueuedOperationExecutor : IQueuedOperationExecutor
             }
         }
 
-        // 2) 결정 그룹: 덮어쓰기(+무충돌) / 둘 다 유지. 건너뛰기는 제외.
+        // 2) 결정 그룹: 무충돌 / 명시적 덮어쓰기 / 둘 다 유지. 건너뛰기는 제외.
+        var defaultGroup = request.Sources
+            .Where(s => !conflictSources.Contains(s) && !skipped.Contains(s))
+            .ToArray();
         var overwriteGroup = request.Sources
-            .Where(s => !skipped.Contains(s) && !keepBoth.Contains(s))
+            .Where(overwrite.Contains)
             .ToArray();
         var keepBothGroup = keepBoth.ToArray();
 
-        if (overwriteGroup.Length == 0 && keepBothGroup.Length == 0)
+        if (defaultGroup.Length == 0 && overwriteGroup.Length == 0 && keepBothGroup.Length == 0)
         {
             return FileOperationResult.Success(); // 전부 건너뜀
         }
@@ -97,8 +110,13 @@ public sealed class QueuedOperationExecutor : IQueuedOperationExecutor
         // 3) 실행 (진행은 그룹 가중 평균으로 합산)
         var move = request.Kind == OperationKind.Move;
         var completed = new List<CompletedItem>();
-        var totalItems = overwriteGroup.Length + keepBothGroup.Length;
+        var totalItems = defaultGroup.Length + overwriteGroup.Length + keepBothGroup.Length;
         var groups = new List<(string[] Sources, CollisionOption Collision)>();
+        if (defaultGroup.Length > 0)
+        {
+            groups.Add((defaultGroup, CollisionOption.Default));
+        }
+
         if (overwriteGroup.Length > 0)
         {
             groups.Add((overwriteGroup, CollisionOption.Overwrite));

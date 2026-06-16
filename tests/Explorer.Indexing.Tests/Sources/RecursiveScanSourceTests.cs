@@ -54,6 +54,23 @@ public sealed class RecursiveScanSourceTests : IDisposable
     }
 
     [Fact]
+    public async Task Scan_StopsAtMaxItems()
+    {
+        for (var i = 0; i < 30; i++)
+        {
+            File.WriteAllText(Path.Combine(_root, $"file{i:D2}.dat"), "x");
+        }
+
+        using var index = new FileIndex();
+        var scanner = new RecursiveScanSource(NullLogger<RecursiveScanSource>.Instance);
+
+        var total = await scanner.ScanAsync(_root, index.AddBatch, maxItems: 10);
+
+        total.Should().Be(10, "항목 상한에서 멈춘다(대용량 네트워크 드라이브 폭주 방지)");
+        index.Search("file", 50).Count.Should().BeLessThan(30, "상한 도달로 일부만 인덱싱됨");
+    }
+
+    [Fact]
     public async Task Scan_Cancellation_StopsEnumeration()
     {
         for (var i = 0; i < 50; i++)

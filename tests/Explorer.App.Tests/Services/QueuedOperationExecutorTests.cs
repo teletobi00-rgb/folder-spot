@@ -77,7 +77,7 @@ public sealed class QueuedOperationExecutorTests : IDisposable
     }
 
     [Fact]
-    public async Task NoConflicts_ExecutesSingleOverwriteGroup_WithoutPrompt()
+    public async Task NoConflicts_ExecutesSingleDefaultGroup_WithoutPrompt()
     {
         var source = MakeSource("clean.txt");
 
@@ -88,7 +88,7 @@ public sealed class QueuedOperationExecutorTests : IDisposable
         await _operations.Received(1).CopyAsync(
             Arg.Is<IReadOnlyList<string>>(p => p.Single() == source),
             _destDir,
-            Arg.Is<FileOperationContext?>(c => c!.Collision == CollisionOption.Overwrite));
+            Arg.Is<FileOperationContext?>(c => c!.Collision == CollisionOption.Default));
     }
 
     [Fact]
@@ -99,6 +99,8 @@ public sealed class QueuedOperationExecutorTests : IDisposable
         MakeDestCollision("skip.txt");
         var keepMe = MakeSource("keep.txt");
         MakeDestCollision("keep.txt");
+        var overwriteMe = MakeSource("overwrite.txt");
+        MakeDestCollision("overwrite.txt");
 
         _prompt.ResolveAsync(Arg.Any<IReadOnlyList<FileConflict>>())
             .Returns(call =>
@@ -107,20 +109,27 @@ public sealed class QueuedOperationExecutorTests : IDisposable
                 var decisions = new Dictionary<FileConflict, ConflictDecision>();
                 foreach (var conflict in conflicts)
                 {
-                    decisions[conflict] = conflict.Name == "skip.txt"
-                        ? ConflictDecision.Skip
-                        : ConflictDecision.KeepBoth;
+                    decisions[conflict] = conflict.Name switch
+                    {
+                        "skip.txt" => ConflictDecision.Skip,
+                        "keep.txt" => ConflictDecision.KeepBoth,
+                        _ => ConflictDecision.Overwrite,
+                    };
                 }
 
                 return Task.FromResult<IReadOnlyDictionary<FileConflict, ConflictDecision>?>(decisions);
             });
 
         var result = await _executor.ExecuteAsync(
-            Op(OperationRequest.Copy([clean, skipMe, keepMe], _destDir)));
+            Op(OperationRequest.Copy([clean, skipMe, keepMe, overwriteMe], _destDir)));
 
         result.Succeeded.Should().BeTrue();
         await _operations.Received(1).CopyAsync(
             Arg.Is<IReadOnlyList<string>>(p => p.Single() == clean),
+            _destDir,
+            Arg.Is<FileOperationContext?>(c => c!.Collision == CollisionOption.Default));
+        await _operations.Received(1).CopyAsync(
+            Arg.Is<IReadOnlyList<string>>(p => p.Single() == overwriteMe),
             _destDir,
             Arg.Is<FileOperationContext?>(c => c!.Collision == CollisionOption.Overwrite));
         await _operations.Received(1).CopyAsync(

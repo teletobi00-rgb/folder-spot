@@ -35,4 +35,4 @@ Velopack으로 패키징하고 GitHub 릴리스로 자동 업데이트한다. [d
 
 ## 라이선스
 
-내부/개인 프로젝트. 번들 폰트 Pretendard(SIL OFL 1.1).
+[MIT License](LICENSE). 번들 폰트 Pretendard는 SIL Open Font License 1.1.

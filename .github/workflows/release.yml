@@ -1,0 +1,110 @@
+name: Release
+
+# v* 태그를 푸시하면 자체포함 빌드 → (SignPath 시크릿이 있으면) 코드 서명 → GitHub 릴리스 발행.
+# SignPath가 설정되기 전에는 미서명 릴리스를 만든다(파이프라인은 그대로 동작).
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write   # 릴리스 생성/자산 업로드
+  id-token: write   # SignPath 빌드 출처 검증(OIDC)
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      # 시크릿이 비어 있으면 SignPath 단계는 건너뛴다(env 컨텍스트는 step if에서 안전하게 평가됨).
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Resolve version from tag
+        id: ver
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Install Velopack CLI
+        run: dotnet tool install -g vpk --version 1.2.0
+
+      - name: Publish (self-contained + ReadyToRun)
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $projects = @(
+            'src/Explorer.App/Explorer.App.csproj',
+            'src/Explorer.Helper.Elevated/Explorer.Helper.Elevated.csproj',
+            'src/Explorer.Helper.ShellMenu/Explorer.Helper.ShellMenu.csproj'
+          )
+          foreach ($p in $projects) {
+            dotnet publish $p -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -p:Version=$v -o publish
+            if ($LASTEXITCODE -ne 0) { throw "publish failed: $p" }
+          }
+
+      # ── SignPath 코드 서명 (시크릿 설정 시 자동) ──────────────────────────────
+      # 승인 후 repo Settings에 채울 값:
+      #   Secrets → SIGNPATH_API_TOKEN
+      #   Variables → SIGNPATH_ORG_ID, SIGNPATH_PROJECT_SLUG, SIGNPATH_POLICY_SLUG,
+      #               SIGNPATH_ARTIFACT_SLUG_BINARIES, SIGNPATH_ARTIFACT_SLUG_INSTALLER
+      # 자세한 설정은 docs/SIGNING.md 참조.
+      - name: Upload unsigned binaries for signing
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        id: upload-bins
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-binaries
+          path: publish
+
+      - name: SignPath - sign application binaries
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_SLUG_BINARIES }}
+          github-artifact-id: ${{ steps.upload-bins.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: publish   # 서명된 exe로 덮어쓴다
+
+      - name: Pack (Velopack)
+        shell: pwsh
+        run: |
+          vpk pack --packId FolderSpot --packVersion ${{ steps.ver.outputs.version }} --packDir publish --mainExe Explorer.App.exe --packTitle "Folder Spot" --icon src/Explorer.App/Assets/app.ico --outputDir Releases
+          if ($LASTEXITCODE -ne 0) { throw "vpk pack failed" }
+
+      - name: Upload unsigned installer for signing
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        id: upload-setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-installer
+          path: Releases/*Setup.exe
+
+      - name: SignPath - sign installer
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_SLUG_INSTALLER }}
+          github-artifact-id: ${{ steps.upload-setup.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: Releases   # 서명된 Setup.exe로 덮어쓴다
+      # ──────────────────────────────────────────────────────────────────────────
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        run: |
+          vpk upload github --repoUrl https://github.com/teletobi00-rgb/folder-spot --publish --releaseName "${{ github.ref_name }}" --tag "${{ github.ref_name }}" --token ${{ secrets.GITHUB_TOKEN }} --outputDir Releases
+          if ($LASTEXITCODE -ne 0) { throw "vpk upload failed" }

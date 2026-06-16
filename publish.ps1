@@ -44,7 +44,8 @@ $projects = @(
 )
 foreach ($proj in $projects) {
     Write-Host "-- publish: $proj" -ForegroundColor DarkGray
-    dotnet publish (Join-Path $root $proj) -c $Configuration -r $Runtime --self-contained true -o $pub
+    # ReadyToRun: precompile IL to native to cut JIT warmup / speed up startup.
+    dotnet publish (Join-Path $root $proj) -c $Configuration -r $Runtime --self-contained true -p:PublishReadyToRun=true -o $pub
     if ($LASTEXITCODE -ne 0) { throw "publish failed: $proj" }
 }
 

@@ -1,4 +1,5 @@
 ﻿using System.Runtime;
+using Explorer.Core;
 using Explorer.Core.FileSystem;
 using Explorer.Indexing.Index;
 using Explorer.Indexing.Persistence;
@@ -46,6 +47,13 @@ public sealed record IndexingOptions
 
     /// <summary>변경 후 스냅샷 저장까지의 지연.</summary>
     public TimeSpan SnapshotInterval { get; init; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// 스냅샷이 이보다 최근이면 시작 시 전체 재스캔을 건너뛰고 FSW 증분만 시작한다(시작 CPU/IO 절감).
+    /// null이면 항상 재스캔. 닫혀 있던 동안의 변경은 다음 전체 재스캔(FSW 오버플로 등)까지 반영이 늦을 수 있다.
+    /// USN 고속 경로가 켜져 있으면(전체 MFT 열거 필요) 이 값과 무관하게 항상 재스캔한다.
+    /// </summary>
+    public TimeSpan? StartupRescanSkipMaxAge { get; init; } = TimeSpan.FromHours(6);
 
     public static IndexingOptions FromEnvironment() => new()
     {
@@ -150,7 +158,8 @@ public sealed class IndexingService : IHostedService, IDisposable
         try
         {
             // 1) 스냅샷 즉시 복원 — 재스캔이 끝나기 전에도 검색이 동작한다.
-            if (_snapshot.TryLoad() is { } restored)
+            var restored = _snapshot.TryLoad();
+            if (restored is not null)
             {
                 _catalog.Swap(restored).Dispose();
                 _logger.LogInformation("인덱스 스냅샷 복원: {Count:N0}개 항목 — 즉시 검색 가능", restored.Count);
@@ -163,12 +172,23 @@ public sealed class IndexingService : IHostedService, IDisposable
                 return;
             }
 
-            // 2) 전체 재구축은 새 인덱스에 수행 후 원자 교체 (스냅샷이 stale해도 검색 무중단).
-            //    USN 고속 경로 볼륨은 자체 tailing을 시작하고, 나머지는 FSW 감시가 필요하다.
-            var fallbackRoots = await RescanAllAsync(roots, ct).ConfigureAwait(false);
+            // 2) 스냅샷이 충분히 최신이면 전체 재스캔을 건너뛰고 FSW 증분만 시작(시작 CPU/IO 절감).
+            //    아니면 새 인덱스에 전체 재구축 후 원자 교체(USN 볼륨은 자체 tailing, 나머지는 FSW 폴백).
+            IReadOnlyList<string> watchRoots;
+            if (ShouldSkipStartupRescan(restored))
+            {
+                _logger.LogInformation(
+                    "스냅샷이 최신 — 시작 전체 재스캔 생략, FSW 증분 감시만 시작 ({Count:N0}개 항목)",
+                    _catalog.Current.Count);
+                watchRoots = roots;
+            }
+            else
+            {
+                watchRoots = await RescanAllAsync(roots, ct).ConfigureAwait(false);
+            }
 
-            // 3) FSW 증분 감시는 폴백 볼륨에만 (USN 볼륨은 이미 tailing 중) + 주기 스냅샷
-            foreach (var root in fallbackRoots)
+            // 3) FSW 증분 감시 + 주기 스냅샷 (재스캔을 건너뛴 경우 모든 루트를 FSW로 감시)
+            foreach (var root in watchRoots)
             {
                 StartWatcher(root);
             }
@@ -208,6 +228,43 @@ public sealed class IndexingService : IHostedService, IDisposable
                 && (d.Kind == DriveKind.Fixed
                     || (_options.IndexNetworkDrives && d.Kind == DriveKind.Network)))
             .Select(d => d.RootPath)];
+    }
+
+    /// <summary>스냅샷이 충분히 최신이면 시작 전체 재스캔을 건너뛸지 판단한다.</summary>
+    private bool ShouldSkipStartupRescan(FileIndex? restored)
+    {
+        // 진단/안전 밸브: 강제 전체 재스캔.
+        if (Environment.GetEnvironmentVariable("EXPLORER_FORCE_FULL_RESCAN") == "1")
+        {
+            return false;
+        }
+
+        // 복원된 스냅샷이 없거나 비었으면 재스캔이 필요하다.
+        if (restored is null || restored.Count == 0)
+        {
+            return false;
+        }
+
+        // USN 고속 경로는 전체 MFT 열거가 필요(스냅샷만으로 tailing 시작 불가) → 항상 재스캔.
+        if (_options.FastIndexingEnabled)
+        {
+            return false;
+        }
+
+        // 옵션이 꺼져 있으면 스킵하지 않는다.
+        if (_options.StartupRescanSkipMaxAge is not { } maxAge)
+        {
+            return false;
+        }
+
+        // 스냅샷 저장 시각(≈ 마지막 종료 시각)이 임계 이내일 때만 — 닫혀 있던 동안 변경이 적다고 본다.
+        if (_snapshot.TryGetLastSavedUtc() is not { } savedUtc)
+        {
+            return false;
+        }
+
+        var age = DateTime.UtcNow - savedUtc;
+        return age >= TimeSpan.Zero && age <= maxAge;
     }
 
     /// <summary>전체 재구축. USN 고속 경로/재귀 폴백을 볼륨별로 선택하고, FSW가 필요한 폴백 볼륨 목록을 돌려준다.</summary>
@@ -254,28 +311,13 @@ public sealed class IndexingService : IHostedService, IDisposable
     /// <summary>대규모 재구축 직후 LOH 압축 + 워킹셋 트림으로 메모리를 OS에 반환한다(백그라운드 스레드에서만 호출).</summary>
     private void TrimMemory()
     {
-        try
-        {
-            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
-            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
-            GC.WaitForPendingFinalizers();
-            GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
-            EmptyWorkingSet(GetCurrentProcess());
-            _logger.LogDebug("인덱싱 후 메모리 트림 완료");
-        }
-        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
-        {
-            // 트림은 최적화일 뿐 — 실패해도 기능엔 영향 없음.
-            _logger.LogDebug(ex, "워킹셋 트림 생략");
-        }
+        GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+        ProcessMemory.TrimWorkingSet();
+        _logger.LogDebug("인덱싱 후 메모리 트림 완료");
     }
-
-    [System.Runtime.InteropServices.DllImport("kernel32.dll")]
-    private static extern IntPtr GetCurrentProcess();
-
-    [System.Runtime.InteropServices.DllImport("psapi.dll", SetLastError = true)]
-    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
-    private static extern bool EmptyWorkingSet(IntPtr hProcess);
 
     /// <summary>USN 고속 경로 시도. 열거 성공 시 true(소스는 tailing 유지), 실패 시 false(호출자 폴백).</summary>
     private async Task<bool> TryUsnRescanAsync(string root, FileIndex rebuilt, CancellationToken ct)

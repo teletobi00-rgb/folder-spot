@@ -83,6 +83,37 @@ public sealed class SqliteIndexSnapshot
         }
     }
 
+    /// <summary>스냅샷이 마지막으로 저장된 시각(UTC). 파일이 없으면 null. 시작 재스캔 스킵 판단용.</summary>
+    public DateTime? TryGetLastSavedUtc()
+    {
+        try
+        {
+            if (!File.Exists(_dbPath))
+            {
+                return null;
+            }
+
+            // WAL 모드라 실제 쓰기가 -wal에 먼저 갈 수 있으므로 둘 중 최신을 본다.
+            var latest = File.GetLastWriteTimeUtc(_dbPath);
+            var wal = _dbPath + "-wal";
+            if (File.Exists(wal))
+            {
+                var walTime = File.GetLastWriteTimeUtc(wal);
+                if (walTime > latest)
+                {
+                    latest = walTime;
+                }
+            }
+
+            return latest;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogDebug(ex, "스냅샷 저장 시각 확인 실패: {Path}", _dbPath);
+            return null;
+        }
+    }
+
     /// <summary>스냅샷에서 새 인덱스를 복원한다. 없거나 손상이면 null (호출자는 빈 인덱스로 시작).</summary>
     public FileIndex? TryLoad()
     {

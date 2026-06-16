@@ -62,6 +62,7 @@ public partial class MainWindow : FluentWindow
             {
                 e.Cancel = true;
                 Hide();
+                TrimMemoryWhenHidden();
                 return;
             }
 
@@ -82,6 +83,16 @@ public partial class MainWindow : FluentWindow
         // 마우스 뒤로/앞으로 버튼(XButton1/2) → 활성 페인 폴더 이동. 터널링이라 자식이 먹어도 잡는다.
         PreviewMouseDown += OnNavigationMouseButton;
     }
+
+    /// <summary>트레이로 숨겨 유휴가 되면 백그라운드에서 가비지 수거 + 워킹셋 반환(다음 표시 때 페이지 폴트로 복구).</summary>
+    private static void TrimMemoryWhenHidden() =>
+        _ = Task.Run(() =>
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            Explorer.Core.ProcessMemory.TrimWorkingSet();
+        });
 
     /// <summary>마우스 보조 버튼으로 폴더 히스토리 뒤로/앞으로 이동(Alt+←/→와 동일 명령).</summary>
     private void OnNavigationMouseButton(object sender, MouseButtonEventArgs e)

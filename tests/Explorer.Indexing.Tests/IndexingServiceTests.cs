@@ -98,6 +98,51 @@ public sealed class IndexingServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task FreshSnapshot_SkipsStartupRescan_RestoresWithoutScanningDisk()
+    {
+        // 디스크엔 seed.txt가 있지만, 스냅샷엔 그와 다른 snapshot-only.txt만 넣어 둔다.
+        var snapshotPath = Path.Combine(_tempDir, "skip.db");
+        using (var seeded = new FileIndex())
+        {
+            seeded.AddOrUpdate(new IndexItem(_rootDir, "snapshot-only.txt", IsDirectory: false, 7, 0));
+            new SqliteIndexSnapshot(snapshotPath, NullLogger<SqliteIndexSnapshot>.Instance).TrySave(seeded);
+        }
+
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+        var catalog = new FileIndexCatalog();
+        var service = new IndexingService(
+            catalog,
+            new SqliteIndexSnapshot(snapshotPath, NullLogger<SqliteIndexSnapshot>.Instance),
+            new RecursiveScanSource(NullLogger<RecursiveScanSource>.Instance),
+            Substitute.For<IDriveProvider>(),
+            new IndexingOptions
+            {
+                Roots = [_rootDir],
+                SnapshotInterval = TimeSpan.FromHours(1),
+                StartupRescanSkipMaxAge = TimeSpan.FromHours(6),
+            },
+            NullLogger<IndexingService>.Instance);
+
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+            await WaitUntilAsync(
+                () => catalog.Current.Search("snapshot-only", 5).Count == 1, "스냅샷이 즉시 복원");
+            await Task.Delay(150); // 재스캔이 있었다면 seed.txt가 들어올 시간
+
+            catalog.Current.Search("snapshot-only", 5).Should().ContainSingle();
+            catalog.Current.Search("seed", 5).Should()
+                .BeEmpty("최신 스냅샷이라 시작 재스캔을 건너뛰어 디스크의 seed.txt는 인덱싱되지 않음");
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+            service.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task DisabledOption_DoesNothing()
     {
         var disabled = new IndexingService(

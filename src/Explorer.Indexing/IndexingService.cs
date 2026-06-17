@@ -267,7 +267,28 @@ public sealed class IndexingService : IHostedService, IDisposable
             root,
             _ => new DriveIndexProgress(root, phase, itemCount < 0 ? 0 : itemCount),
             (_, prev) => prev with { Phase = phase, ItemCount = itemCount < 0 ? prev.ItemCount : itemCount });
-        DriveProgressChanged?.Invoke(this, progress);
+        NotifyDriveProgressChanged(progress);
+    }
+
+    private void NotifyDriveProgressChanged(DriveIndexProgress progress)
+    {
+        var handlers = DriveProgressChanged;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (EventHandler<DriveIndexProgress> handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                handler(this, progress);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "드라이브 진행 상태 구독자 예외 무시: {Root}", progress.Root);
+            }
+        }
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -358,11 +379,14 @@ public sealed class IndexingService : IHostedService, IDisposable
                 if (networkRoots.Count > 0)
                 {
                     using var lease = _catalog.Acquire();
-                    await ScanNetworkRootsAsync(
+                    var networkChanged = await ScanNetworkRootsAsync(
                         networkRoots, lease.Index, _options.NetworkFolders is { Count: > 0 }, ct).ConfigureAwait(false);
                     _catalog.RefreshLastKnownCount();
-                    _dirty = true;
-                    SaveSnapshotIfDirty();
+                    if (networkChanged)
+                    {
+                        _dirty = true;
+                        SaveSnapshotIfDirty();
+                    }
                 }
 
                 watchRoots = roots;
@@ -512,11 +536,12 @@ public sealed class IndexingService : IHostedService, IDisposable
         TrimMemory();
 
         // 3) 네트워크는 살아있는 인덱스에 추가. 지정 폴더면 상한 없이, 드라이브 전체면 상한을 둔다(폭주·지연 방지).
-        await ScanNetworkRootsAsync(networkRoots, rebuilt, _options.NetworkFolders is { Count: > 0 }, ct)
+        var networkChanged = await ScanNetworkRootsAsync(
+                networkRoots, rebuilt, _options.NetworkFolders is { Count: > 0 }, ct)
             .ConfigureAwait(false);
         fallbackRoots.AddRange(networkRoots);
 
-        if (networkRoots.Count > 0)
+        if (networkChanged)
         {
             _dirty = true;
             SaveSnapshotIfDirty();
@@ -527,20 +552,25 @@ public sealed class IndexingService : IHostedService, IDisposable
     }
 
     /// <summary>네트워크 루트들을 인덱스에 추가한다. 지정 폴더(uncapped)는 상한 없이, 드라이브 전체는 상한을 둔다.</summary>
-    private async Task ScanNetworkRootsAsync(
+    private async Task<bool> ScanNetworkRootsAsync(
         IReadOnlyList<string> networkRoots, FileIndex index, bool uncapped, CancellationToken ct)
     {
+        var changed = false;
         foreach (var root in networkRoots)
         {
-            await RescanNetworkRootAsync(root, index, uncapped, ct).ConfigureAwait(false);
+            var result = await RescanNetworkRootAsync(root, index, uncapped, ct).ConfigureAwait(false);
+            changed |= result == NetworkRootScanResult.Complete;
         }
+
+        return changed;
     }
 
     /// <summary>
     /// 네트워크 루트를 인덱스에 추가한다. <paramref name="uncapped"/>=true(사용자 지정 폴더)면 상한 없이 전부,
     /// false(드라이브 전체)면 노드 수·시간 상한을 둔다(상한 초과 시 일부만 — 앱은 정상).
     /// </summary>
-    private async Task RescanNetworkRootAsync(string root, FileIndex index, bool uncapped, CancellationToken ct)
+    private async Task<NetworkRootScanResult> RescanNetworkRootAsync(
+        string root, FileIndex index, bool uncapped, CancellationToken ct)
     {
         Status = $"네트워크 인덱싱: {root}";
         UpdateDrive(root, DriveIndexPhase.Scanning);
@@ -567,26 +597,88 @@ public sealed class IndexingService : IHostedService, IDisposable
             scanToken = budgetCts.Token;
         }
 
+        using var staging = new FileIndex();
         try
         {
-            var total = await _scanner.ScanAsync(root, index.AddBatch, maxItems, scanToken).ConfigureAwait(false);
-            UpdateDrive(root, DriveIndexPhase.Watching, total);
+            var result = await _scanner.ScanAsync(root, staging.AddBatch, maxItems, scanToken).ConfigureAwait(false);
+            if (result.HitLimit)
+            {
+                MergeIndex(index, staging);
+                UpdateDrive(root, DriveIndexPhase.Partial, result.Count);
+                _logger.LogWarning(
+                    "네트워크 인덱싱 항목 상한 도달 — 일부만 인덱싱: {Root} ({Count:N0}개)",
+                    root, result.Count);
+                return NetworkRootScanResult.Partial;
+            }
+
+            ReplaceSubtree(index, root, staging);
+            UpdateDrive(root, DriveIndexPhase.Watching, result.Count);
+            return NetworkRootScanResult.Complete;
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
             // 시간 예산 초과 — 일부만 인덱싱된 채 중단한다(로컬 검색은 이미 동작 중).
+            MergeIndex(index, staging);
             UpdateDrive(root, DriveIndexPhase.Partial);
             _logger.LogWarning("네트워크 인덱싱 시간 예산 초과 — 일부만 인덱싱: {Root}", root);
+            return NetworkRootScanResult.Partial;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
         {
             UpdateDrive(root, DriveIndexPhase.Error);
             _logger.LogWarning(ex, "네트워크 인덱싱 실패 — 건너뜀: {Root}", root);
+            return NetworkRootScanResult.Failed;
         }
         finally
         {
             budgetCts?.Dispose();
         }
+    }
+
+    private static void ReplaceSubtree(FileIndex target, string root, FileIndex source)
+    {
+        target.RemoveSubtree(root);
+        MergeIndex(target, source);
+    }
+
+    private static void MergeIndex(FileIndex target, FileIndex source)
+    {
+        var pathsById = new Dictionary<int, string>();
+        var batch = new List<IndexItem>(5000);
+
+        void Flush()
+        {
+            if (batch.Count == 0)
+            {
+                return;
+            }
+
+            target.AddBatch(batch);
+            batch = new List<IndexItem>(5000);
+        }
+
+        source.ExportNodes((id, parentId, name, size, modifiedTicks, isDirectory) =>
+        {
+            if (parentId == -1)
+            {
+                pathsById[id] = name;
+                return;
+            }
+
+            if (!pathsById.TryGetValue(parentId, out var parentPath))
+            {
+                return;
+            }
+
+            pathsById[id] = Path.Combine(parentPath, name);
+            batch.Add(new IndexItem(parentPath, name, isDirectory, size, modifiedTicks));
+            if (batch.Count >= 5000)
+            {
+                Flush();
+            }
+        });
+
+        Flush();
     }
 
     /// <summary>대규모 재구축 직후 LOH 압축 + 워킹셋 트림으로 메모리를 OS에 반환한다(백그라운드 스레드에서만 호출).</summary>
@@ -638,8 +730,8 @@ public sealed class IndexingService : IHostedService, IDisposable
         _logger.LogInformation("인덱스 스캔 시작(폴백): {Root}", root);
         try
         {
-            var total = await _scanner.ScanAsync(root, rebuilt.AddBatch, ct).ConfigureAwait(false);
-            UpdateDrive(root, DriveIndexPhase.Watching, total);
+            var result = await _scanner.ScanAsync(root, rebuilt.AddBatch, ct).ConfigureAwait(false);
+            UpdateDrive(root, DriveIndexPhase.Watching, result.Count);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
         {
@@ -691,6 +783,12 @@ public sealed class IndexingService : IHostedService, IDisposable
         var oldParent = Path.GetDirectoryName(oldPath);
         var newParent = Path.GetDirectoryName(newPath);
         var newName = Path.GetFileName(newPath);
+
+        if (IndexExclusions.IsExcludedPath(newPath))
+        {
+            index.RemoveSubtree(oldPath);
+            return;
+        }
 
         // 같은 부모 내 이름변경이면 O(1) Rename으로 하위 경로까지 보존된다.
         if (string.Equals(oldParent, newParent, StringComparison.OrdinalIgnoreCase) && newName.Length > 0)
@@ -799,6 +897,13 @@ public sealed class IndexingService : IHostedService, IDisposable
             source.Dispose();
             indexLease.Dispose();
         }
+    }
+
+    private enum NetworkRootScanResult
+    {
+        Complete,
+        Partial,
+        Failed,
     }
 
     /// <summary>카테고리만 다른 로거 어댑터 (DI 밖에서 워처를 만들 때 사용).</summary>

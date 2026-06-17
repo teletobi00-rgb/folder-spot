@@ -60,6 +60,15 @@ public sealed class IndexingServiceTests : IAsyncDisposable
         condition().Should().BeTrue(because);
     }
 
+    private static IDriveProvider DriveProviderFor(string root, DriveKind kind)
+    {
+        var provider = Substitute.For<IDriveProvider>();
+        provider.GetDrives().Returns([
+            new DriveEntry(Path.GetPathRoot(root)!, string.Empty, kind, 0, 0, IsReady: true),
+        ]);
+        return provider;
+    }
+
     [Fact]
     public async Task Pipeline_ScansRoot_ThenWatchesIncrementally_AndPersistsSnapshot()
     {
@@ -134,6 +143,110 @@ public sealed class IndexingServiceTests : IAsyncDisposable
             catalog.Current.Search("snapshot-only", 5).Should().ContainSingle();
             catalog.Current.Search("seed", 5).Should()
                 .BeEmpty("최신 스냅샷이라 시작 재스캔을 건너뛰어 디스크의 seed.txt는 인덱싱되지 않음");
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+            service.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task DriveProgressSubscriberException_DoesNotStopPipeline()
+    {
+        _service.DriveProgressChanged += (_, _) => throw new InvalidOperationException("bad subscriber");
+
+        await _service.StartAsync(CancellationToken.None);
+
+        await WaitUntilAsync(
+            () => _catalog.Current.Search("seed", 5).Count == 1,
+            "progress subscribers cannot stop indexing");
+        _service.Status.Should().NotBe("오류");
+    }
+
+    [Fact]
+    public async Task FreshSnapshot_NetworkRoot_ReplacesStaleSubtree()
+    {
+        var snapshotPath = Path.Combine(_tempDir, "network-skip.db");
+        File.WriteAllText(Path.Combine(_rootDir, "keep-network.txt"), "keep");
+        using (var seeded = new FileIndex())
+        {
+            seeded.AddOrUpdate(new IndexItem(_rootDir, "keep-network.txt", IsDirectory: false, 4, 0));
+            seeded.AddOrUpdate(new IndexItem(_rootDir, "stale-network.txt", IsDirectory: false, 5, 0));
+            new SqliteIndexSnapshot(snapshotPath, NullLogger<SqliteIndexSnapshot>.Instance).TrySave(seeded)
+                .Should().BeTrue();
+        }
+
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+        var catalog = new FileIndexCatalog();
+        var service = new IndexingService(
+            catalog,
+            new SqliteIndexSnapshot(snapshotPath, NullLogger<SqliteIndexSnapshot>.Instance),
+            new RecursiveScanSource(NullLogger<RecursiveScanSource>.Instance),
+            DriveProviderFor(_rootDir, DriveKind.Network),
+            new IndexingOptions
+            {
+                Roots = [_rootDir],
+                StartupRescanSkipMaxAge = TimeSpan.FromHours(6),
+                SnapshotInterval = TimeSpan.FromHours(1),
+                NetworkScanMaxItems = 1000,
+                NetworkScanTimeBudget = TimeSpan.FromSeconds(5),
+            },
+            NullLogger<IndexingService>.Instance);
+
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+            await WaitUntilAsync(
+                () => catalog.Current.Search("keep-network", 5).Count == 1
+                    && catalog.Current.Search("stale-network", 5).Count == 0,
+                "complete network refresh replaces stale snapshot entries");
+
+            service.DriveProgress.Single(p => p.Root == _rootDir).Phase.Should().Be(DriveIndexPhase.Watching);
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+            service.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task NetworkRoot_HittingMaxItems_IsMarkedPartial()
+    {
+        var networkRoot = Path.Combine(_tempDir, "network-cap");
+        Directory.CreateDirectory(networkRoot);
+        for (var i = 0; i < 30; i++)
+        {
+            File.WriteAllText(Path.Combine(networkRoot, $"file{i:D2}.txt"), "x");
+        }
+
+        var catalog = new FileIndexCatalog();
+        var service = new IndexingService(
+            catalog,
+            new SqliteIndexSnapshot(Path.Combine(_tempDir, "network-cap.db"), NullLogger<SqliteIndexSnapshot>.Instance),
+            new RecursiveScanSource(NullLogger<RecursiveScanSource>.Instance),
+            DriveProviderFor(networkRoot, DriveKind.Network),
+            new IndexingOptions
+            {
+                Roots = [networkRoot],
+                SnapshotInterval = TimeSpan.FromHours(1),
+                NetworkScanMaxItems = 10,
+                NetworkScanTimeBudget = TimeSpan.FromSeconds(5),
+            },
+            NullLogger<IndexingService>.Instance);
+
+        try
+        {
+            await service.StartAsync(CancellationToken.None);
+            await WaitUntilAsync(
+                () => service.DriveProgress.Any(p => p.Root == networkRoot && p.Phase == DriveIndexPhase.Partial),
+                "network item cap is surfaced as partial");
+
+            var indexed = catalog.Current.Search("file", 50).Count;
+            indexed.Should().BeGreaterThan(0);
+            indexed.Should().BeLessThan(30);
         }
         finally
         {

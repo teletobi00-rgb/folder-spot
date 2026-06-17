@@ -82,6 +82,21 @@ public sealed class FswIndexSourceTests : IDisposable
     }
 
     [Fact]
+    public async Task RenamedDirectory_ToExcludedName_RemovesSubtree()
+    {
+        var tracked = Path.Combine(_root, "tracked");
+        Directory.CreateDirectory(tracked);
+        File.WriteAllText(Path.Combine(tracked, "inside.txt"), "x");
+        await WaitUntilAsync(() => _index.Search("inside", 5).Count == 1, "created file is indexed");
+
+        Directory.Move(tracked, Path.Combine(_root, ".git"));
+
+        await WaitUntilAsync(
+            () => _index.Search("inside", 5).Count == 0,
+            "renaming into an excluded directory removes the old subtree");
+    }
+
+    [Fact]
     public void WatcherError_RequestsRootRescan()
     {
         _source.OnError(new InvalidOperationException("버퍼 오버플로 시뮬레이션"));

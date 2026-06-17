@@ -7,7 +7,7 @@
     <AssemblyTitle>Folder Spot</AssemblyTitle>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <!-- 표시용 버전 — 릴리스 시 publish.ps1의 -p:Version으로 덮어쓴다. -->
-    <Version>1.1.1</Version>
+    <Version>1.1.2</Version>
   </PropertyGroup>
 
   <ItemGroup>

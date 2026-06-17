@@ -117,6 +117,12 @@ public sealed class FswIndexSource : IDisposable
             return;
         }
 
+        if (IndexExclusions.IsExcludedPath(newFullPath))
+        {
+            _index.RemoveSubtree(oldFullPath);
+            return;
+        }
+
         if (string.Equals(oldParent, newParent, StringComparison.OrdinalIgnoreCase))
         {
             _index.Rename(oldFullPath, newName);

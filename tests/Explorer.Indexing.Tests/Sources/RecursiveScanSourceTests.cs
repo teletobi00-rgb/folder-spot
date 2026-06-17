@@ -42,7 +42,9 @@ public sealed class RecursiveScanSourceTests : IDisposable
         using var index = new FileIndex();
         var scanner = new RecursiveScanSource(NullLogger<RecursiveScanSource>.Instance);
 
-        var total = await scanner.ScanAsync(_root, index.AddBatch);
+        var result = await scanner.ScanAsync(_root, index.AddBatch);
+        var total = result.Count;
+        result.HitLimit.Should().BeFalse();
 
         total.Should().Be(5, "폴더 2 + 파일 3");
         index.Search("문서", 10).Should().ContainSingle()
@@ -64,7 +66,9 @@ public sealed class RecursiveScanSourceTests : IDisposable
         using var index = new FileIndex();
         var scanner = new RecursiveScanSource(NullLogger<RecursiveScanSource>.Instance);
 
-        var total = await scanner.ScanAsync(_root, index.AddBatch, maxItems: 10);
+        var result = await scanner.ScanAsync(_root, index.AddBatch, maxItems: 10);
+        var total = result.Count;
+        result.HitLimit.Should().BeTrue();
 
         total.Should().Be(10, "항목 상한에서 멈춘다(대용량 네트워크 드라이브 폭주 방지)");
         index.Search("file", 50).Count.Should().BeLessThan(30, "상한 도달로 일부만 인덱싱됨");

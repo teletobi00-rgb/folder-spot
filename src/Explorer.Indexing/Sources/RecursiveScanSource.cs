@@ -23,7 +23,7 @@ public sealed class RecursiveScanSource
     }
 
     /// <summary>루트 전체를 스캔해 배치 단위로 전달한다. 스캔한 항목 수를 반환.</summary>
-    public Task<long> ScanAsync(
+    public Task<ScanResult> ScanAsync(
         string rootPath,
         Action<IReadOnlyList<IndexItem>> onBatch,
         CancellationToken cancellationToken = default) =>
@@ -32,7 +32,7 @@ public sealed class RecursiveScanSource
     /// <summary>
     /// 루트를 스캔하되 <paramref name="maxItems"/>에 도달하면 그 자리에서 멈춘다(대용량 네트워크 드라이브 폭주 방지).
     /// </summary>
-    public Task<long> ScanAsync(
+    public Task<ScanResult> ScanAsync(
         string rootPath,
         Action<IReadOnlyList<IndexItem>> onBatch,
         long maxItems,
@@ -40,6 +40,7 @@ public sealed class RecursiveScanSource
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rootPath);
         ArgumentNullException.ThrowIfNull(onBatch);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxItems);
 
         return Task.Run(() =>
         {
@@ -55,31 +56,48 @@ public sealed class RecursiveScanSource
             using var enumerator = new ResilientIndexEnumerator(rootPath, options);
 
             long total = 0;
+            var hitLimit = false;
             var batch = new List<IndexItem>(BatchSize);
-            while (enumerator.MoveNext())
+            void FlushBatch()
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                batch.Add(enumerator.Current);
-                total++;
-                if (batch.Count >= BatchSize)
+                if (batch.Count == 0)
                 {
-                    onBatch(batch);
-                    batch = new List<IndexItem>(BatchSize);
+                    return;
                 }
 
-                if (total >= maxItems)
-                {
-                    break;
-                }
+                onBatch(batch);
+                batch = new List<IndexItem>(BatchSize);
             }
 
-            if (batch.Count > 0)
+            try
             {
-                onBatch(batch);
+                while (enumerator.MoveNext())
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    batch.Add(enumerator.Current);
+                    total++;
+                    if (batch.Count >= BatchSize)
+                    {
+                        FlushBatch();
+                    }
+
+                    if (total >= maxItems)
+                    {
+                        hitLimit = maxItems != long.MaxValue;
+                        break;
+                    }
+                }
+
+                FlushBatch();
+            }
+            catch (OperationCanceledException)
+            {
+                FlushBatch();
+                throw;
             }
 
             _logger.LogDebug("재귀 스캔 완료: {Root} — {Count:N0}개 항목", rootPath, total);
-            return total;
+            return new ScanResult(total, hitLimit);
         }, cancellationToken);
     }
 
@@ -108,3 +126,5 @@ public sealed class RecursiveScanSource
         protected override bool ContinueOnError(int error) => true;
     }
 }
+
+public readonly record struct ScanResult(long Count, bool HitLimit);

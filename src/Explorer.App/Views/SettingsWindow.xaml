@@ -53,6 +53,47 @@
                 <CheckBox Margin="0,4,0,0"
                           Content="네트워크 드라이브 인덱싱 (느림·재귀 스캔 — 다음 시작부터 적용)"
                           IsChecked="{Binding IndexNetworkDrives}" />
+
+                <!-- 네트워크 인덱싱 폴더 지정: 비우면 드라이브 전체(일부 상한), 지정하면 그 폴더만 상한 없이 -->
+                <StackPanel Margin="24,4,0,0" IsEnabled="{Binding IndexNetworkDrives}">
+                    <TextBlock FontSize="11"
+                               Opacity="0.6"
+                               TextWrapping="Wrap"
+                               Text="특정 폴더만 인덱싱하려면 추가하세요(예: Z:\작업). 지정한 폴더는 제한 없이 전부 인덱싱하므로 폴더가 크면 시간이 걸릴 수 있습니다. 비워두면 네트워크 드라이브 전체를 인덱싱합니다(일부만 — 상한). 다음 시작부터 적용됩니다." />
+                    <StackPanel Margin="0,6,0,0" Orientation="Horizontal">
+                        <ui:Button Margin="0,0,4,0"
+                                   Command="{Binding AddNetworkFolderCommand}"
+                                   Content="추가" />
+                        <ui:Button Click="OnBrowseNetworkFolder" Content="찾아보기…" />
+                    </StackPanel>
+                    <ItemsControl Margin="0,6,0,0" ItemsSource="{Binding NetworkFolders}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <ui:TextBox Grid.Column="0"
+                                                PlaceholderText="네트워크 폴더 경로 (예: Z:\작업)"
+                                                Text="{Binding Path=Path, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Button Grid.Column="1"
+                                            Margin="6,0,0,0"
+                                            Padding="6,2"
+                                            VerticalAlignment="Center"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Command="{Binding DataContext.RemoveNetworkFolderCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}"
+                                            Content="✕"
+                                            FontSize="11"
+                                            ToolTip="이 폴더 삭제" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
                 <CheckBox Margin="0,4,0,0"
                           Content="Windows 시작 시 자동 실행 (부팅 후 인덱싱 시작)"
                           IsChecked="{Binding AutoStartOnBoot}" />

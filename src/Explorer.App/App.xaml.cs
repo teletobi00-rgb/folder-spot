@@ -136,6 +136,9 @@ public partial class App : Application
             {
                 FastIndexingEnabled = settings.Current.UseFastIndexing,
                 IndexNetworkDrives = settings.Current.IndexNetworkDrives,
+                NetworkFolders = settings.Current.NetworkIndexFolders.IsDefaultOrEmpty
+                    ? null
+                    : [.. settings.Current.NetworkIndexFolders],
                 HelperPath = ResolveHelperPath(),
             };
         });

@@ -35,6 +35,8 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public ObservableCollection<ExtensionColorRow> ColorRows { get; } = [];
 
+    public ObservableCollection<NetworkFolderRow> NetworkFolders { get; } = [];
+
     public IReadOnlyList<AppTheme> Themes { get; } = [AppTheme.System, AppTheme.Light, AppTheme.Dark];
 
     public SettingsViewModel(
@@ -57,6 +59,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         SelectedTheme = current.Theme;
         UseFastIndexing = current.UseFastIndexing;
         IndexNetworkDrives = current.IndexNetworkDrives;
+        FillNetworkFolders(current.NetworkIndexFolders);
         AutoStartOnBoot = _autoStart.IsEnabled;
         ShowProgramLauncher = current.ShowProgramLauncher;
         FillRows(current.ExtensionColors);
@@ -86,6 +89,44 @@ public sealed partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void ResetColors() => FillRows(ExtensionColorDefaults.Map);
 
+    private void FillNetworkFolders(ImmutableArray<string> folders)
+    {
+        NetworkFolders.Clear();
+        if (folders.IsDefaultOrEmpty)
+        {
+            return;
+        }
+
+        foreach (var path in folders.Where(p => !string.IsNullOrWhiteSpace(p)))
+        {
+            NetworkFolders.Add(new NetworkFolderRow { Path = path });
+        }
+    }
+
+    [RelayCommand]
+    private void AddNetworkFolder() => NetworkFolders.Add(new NetworkFolderRow { Path = string.Empty });
+
+    [RelayCommand]
+    private void RemoveNetworkFolder(NetworkFolderRow? row)
+    {
+        if (row is not null)
+        {
+            NetworkFolders.Remove(row);
+        }
+    }
+
+    /// <summary>폴더 찾아보기에서 고른 경로를 추가한다(빈 경로·중복 무시).</summary>
+    public void AddNetworkFolderPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)
+            || NetworkFolders.Any(r => string.Equals(r.Path?.Trim(), path.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        NetworkFolders.Add(new NetworkFolderRow { Path = path });
+    }
+
     [RelayCommand]
     private void Save()
     {
@@ -100,11 +141,17 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
 
         var colors = builder.ToImmutable();
+        var netFolders = NetworkFolders
+            .Select(r => r.Path?.Trim())
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => p!)
+            .ToImmutableArray();
         _settings.Update(s => s with
         {
             Theme = SelectedTheme,
             UseFastIndexing = UseFastIndexing,
             IndexNetworkDrives = IndexNetworkDrives,
+            NetworkIndexFolders = netFolders,
             ShowProgramLauncher = ShowProgramLauncher,
             ExtensionColors = colors,
         });
@@ -123,4 +170,11 @@ public sealed partial class ExtensionColorRow : ObservableObject
 
     [ObservableProperty]
     private string _hex = "#808080";
+}
+
+/// <summary>네트워크 인덱싱 폴더 편집 한 행.</summary>
+public sealed partial class NetworkFolderRow : ObservableObject
+{
+    [ObservableProperty]
+    private string _path = string.Empty;
 }

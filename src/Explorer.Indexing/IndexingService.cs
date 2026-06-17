@@ -174,6 +174,9 @@ public sealed record IndexingOptions
     /// <summary>네트워크/매핑 드라이브도 인덱싱(옵트인 — 재귀 스캔, 느림).</summary>
     public bool IndexNetworkDrives { get; init; }
 
+    /// <summary>네트워크 인덱싱 대상 폴더(비우면 네트워크 드라이브 루트 전체). 지정되면 상한 없이 인덱싱한다.</summary>
+    public IReadOnlyList<string>? NetworkFolders { get; init; }
+
     /// <summary>권한 헬퍼 실행 파일 경로 (없으면 USN 비활성).</summary>
     public string? HelperPath { get; init; }
 
@@ -355,7 +358,8 @@ public sealed class IndexingService : IHostedService, IDisposable
                 if (networkRoots.Count > 0)
                 {
                     using var lease = _catalog.Acquire();
-                    await ScanNetworkRootsAsync(networkRoots, lease.Index, ct).ConfigureAwait(false);
+                    await ScanNetworkRootsAsync(
+                        networkRoots, lease.Index, _options.NetworkFolders is { Count: > 0 }, ct).ConfigureAwait(false);
                     _catalog.RefreshLastKnownCount();
                     _dirty = true;
                     SaveSnapshotIfDirty();
@@ -405,11 +409,26 @@ public sealed class IndexingService : IHostedService, IDisposable
             return configured;
         }
 
-        return [.. _drives.GetDrives()
-            .Where(d => d.IsReady
-                && (d.Kind == DriveKind.Fixed
-                    || (_options.IndexNetworkDrives && d.Kind == DriveKind.Network)))
-            .Select(d => d.RootPath)];
+        var roots = new List<string>(_drives.GetDrives()
+            .Where(d => d.IsReady && d.Kind == DriveKind.Fixed)
+            .Select(d => d.RootPath));
+
+        if (_options.IndexNetworkDrives)
+        {
+            // 사용자가 폴더를 지정했으면 그 폴더들만(상한 없이), 아니면 네트워크 드라이브 루트 전체(일부 상한).
+            if (_options.NetworkFolders is { Count: > 0 } folders)
+            {
+                roots.AddRange(folders);
+            }
+            else
+            {
+                roots.AddRange(_drives.GetDrives()
+                    .Where(d => d.IsReady && d.Kind == DriveKind.Network)
+                    .Select(d => d.RootPath));
+            }
+        }
+
+        return roots;
     }
 
     /// <summary>스냅샷이 충분히 최신이면 시작 전체 재스캔을 건너뛸지 판단한다.</summary>
@@ -492,8 +511,9 @@ public sealed class IndexingService : IHostedService, IDisposable
         SaveSnapshotIfDirty();
         TrimMemory();
 
-        // 3) 네트워크 드라이브는 살아있는 인덱스에 상한을 두고 추가(폭주·지연 방지).
-        await ScanNetworkRootsAsync(networkRoots, rebuilt, ct).ConfigureAwait(false);
+        // 3) 네트워크는 살아있는 인덱스에 추가. 지정 폴더면 상한 없이, 드라이브 전체면 상한을 둔다(폭주·지연 방지).
+        await ScanNetworkRootsAsync(networkRoots, rebuilt, _options.NetworkFolders is { Count: > 0 }, ct)
+            .ConfigureAwait(false);
         fallbackRoots.AddRange(networkRoots);
 
         if (networkRoots.Count > 0)
@@ -506,30 +526,50 @@ public sealed class IndexingService : IHostedService, IDisposable
         return fallbackRoots;
     }
 
-    /// <summary>네트워크 루트들을 각각 상한(노드 수·시간) 안에서 인덱스에 추가한다. 시작 스킵 분기와 전체 재스캔이 공유.</summary>
-    private async Task ScanNetworkRootsAsync(IReadOnlyList<string> networkRoots, FileIndex index, CancellationToken ct)
+    /// <summary>네트워크 루트들을 인덱스에 추가한다. 지정 폴더(uncapped)는 상한 없이, 드라이브 전체는 상한을 둔다.</summary>
+    private async Task ScanNetworkRootsAsync(
+        IReadOnlyList<string> networkRoots, FileIndex index, bool uncapped, CancellationToken ct)
     {
         foreach (var root in networkRoots)
         {
-            await RescanNetworkRootAsync(root, index, ct).ConfigureAwait(false);
+            await RescanNetworkRootAsync(root, index, uncapped, ct).ConfigureAwait(false);
         }
     }
 
-    /// <summary>네트워크 드라이브를 노드 수·시간 상한을 두고 인덱스에 추가한다. 상한 초과 시 일부만(앱은 정상).</summary>
-    private async Task RescanNetworkRootAsync(string root, FileIndex index, CancellationToken ct)
+    /// <summary>
+    /// 네트워크 루트를 인덱스에 추가한다. <paramref name="uncapped"/>=true(사용자 지정 폴더)면 상한 없이 전부,
+    /// false(드라이브 전체)면 노드 수·시간 상한을 둔다(상한 초과 시 일부만 — 앱은 정상).
+    /// </summary>
+    private async Task RescanNetworkRootAsync(string root, FileIndex index, bool uncapped, CancellationToken ct)
     {
         Status = $"네트워크 인덱싱: {root}";
         UpdateDrive(root, DriveIndexPhase.Scanning);
-        _logger.LogInformation(
-            "네트워크 드라이브 인덱싱 시작(상한 {Max:N0}개 / {Sec:N0}s): {Root}",
-            _options.NetworkScanMaxItems, _options.NetworkScanTimeBudget.TotalSeconds, root);
 
-        using var budgetCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        budgetCts.CancelAfter(_options.NetworkScanTimeBudget);
+        var maxItems = uncapped ? long.MaxValue : _options.NetworkScanMaxItems;
+        if (uncapped)
+        {
+            _logger.LogInformation("네트워크 폴더 인덱싱 시작(상한 없음): {Root}", root);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "네트워크 드라이브 인덱싱 시작(상한 {Max:N0}개 / {Sec:N0}s): {Root}",
+                _options.NetworkScanMaxItems, _options.NetworkScanTimeBudget.TotalSeconds, root);
+        }
+
+        // 지정 폴더는 시간 예산 없이, 드라이브 전체는 시간 예산을 적용한다.
+        CancellationTokenSource? budgetCts = null;
+        var scanToken = ct;
+        if (!uncapped)
+        {
+            budgetCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            budgetCts.CancelAfter(_options.NetworkScanTimeBudget);
+            scanToken = budgetCts.Token;
+        }
+
         try
         {
-            var total = await _scanner.ScanAsync(root, index.AddBatch, _options.NetworkScanMaxItems, budgetCts.Token)
-                .ConfigureAwait(false);
+            var total = await _scanner.ScanAsync(root, index.AddBatch, maxItems, scanToken).ConfigureAwait(false);
             UpdateDrive(root, DriveIndexPhase.Watching, total);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -542,6 +582,10 @@ public sealed class IndexingService : IHostedService, IDisposable
         {
             UpdateDrive(root, DriveIndexPhase.Error);
             _logger.LogWarning(ex, "네트워크 인덱싱 실패 — 건너뜀: {Root}", root);
+        }
+        finally
+        {
+            budgetCts?.Dispose();
         }
     }
 
@@ -604,11 +648,21 @@ public sealed class IndexingService : IHostedService, IDisposable
         }
     }
 
-    private DriveKind DriveKindOf(string root) =>
-        _drives.GetDrives().FirstOrDefault(d =>
-            string.Equals(d.RootPath, root, StringComparison.OrdinalIgnoreCase)) is { } drive
+    private DriveKind DriveKindOf(string root)
+    {
+        // UNC 경로(\\server\share)는 네트워크. 그 외엔 드라이브 루트(예: "Z:\")로 정규화해 종류를 찾는다 —
+        // 사용자 지정 하위 폴더("Z:\작업")도 올바르게 네트워크로 분류된다.
+        if (root.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            return DriveKind.Network;
+        }
+
+        var driveRoot = Path.GetPathRoot(root) ?? root;
+        return _drives.GetDrives().FirstOrDefault(d =>
+            string.Equals(d.RootPath, driveRoot, StringComparison.OrdinalIgnoreCase)) is { } drive
             ? drive.Kind
-            : DriveKind.Fixed; // 진단용 명시 루트는 고정으로 간주
+            : DriveKind.Fixed; // 매칭 없으면 고정으로 간주
+    }
 
     /// <summary>USN/FSW 변경 델타를 인덱스에 반영한다.</summary>
     private static void ApplyChange(FileIndex index, in UsnChange change)

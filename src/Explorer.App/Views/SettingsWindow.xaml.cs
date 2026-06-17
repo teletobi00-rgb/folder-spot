@@ -26,4 +26,13 @@ public partial class SettingsWindow : FluentWindow
     }
 
     private void OnCancelClick(object sender, RoutedEventArgs e) => Close();
+
+    private void OnBrowseNetworkFolder(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "네트워크 인덱싱 폴더 선택" };
+        if (dialog.ShowDialog(this) == true)
+        {
+            _viewModel.AddNetworkFolderPath(dialog.FolderName);
+        }
+    }
 }

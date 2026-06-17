@@ -23,6 +23,12 @@ public sealed record AppSettings
     /// <summary>네트워크/매핑 드라이브도 인덱싱할지(기본 꺼짐 — USN 불가 + 재귀 스캔이 느리고 무겁다).</summary>
     public bool IndexNetworkDrives { get; init; }
 
+    /// <summary>
+    /// 네트워크 인덱싱을 특정 폴더로 한정한다(예: "Z:\\작업", "\\\\server\\share\\folder").
+    /// 비우면 네트워크 드라이브 루트 전체를 인덱싱한다(일부 상한). 지정하면 그 폴더들을 상한 없이 전부 인덱싱한다.
+    /// </summary>
+    public ImmutableArray<string> NetworkIndexFolders { get; init; } = [];
+
     /// <summary>마지막 세션의 탭/페인 구성 (최초 실행이면 null).</summary>
     public WorkspaceSession? Session { get; init; }
 

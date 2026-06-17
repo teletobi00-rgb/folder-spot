@@ -56,7 +56,7 @@ public sealed class ShellContextMenuService : IShellContextMenuService
         }
 
         // 헬퍼 미배포 시에만 in-proc 폴백(격리 없음 — 기능 유지 우선).
-        _logger.LogWarning("셸 메뉴 헬퍼를 찾을 수 없어 in-proc로 표시합니다(확장에 따라 불안정할 수 있음).");
+        _logger.LogWarning("셸 메뉴 헬퍼를 찾을 수 없어 in-proc로 표시합니다.");
         NativeContextMenuHost.Show(paths, screenX, screenY, _logger);
     }
 

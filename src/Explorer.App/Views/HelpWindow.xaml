@@ -1,0 +1,110 @@
+<ui:FluentWindow x:Class="Explorer.App.Views.HelpWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 Title="도움말 — Folder Spot"
+                 Width="600"
+                 Height="680"
+                 FontFamily="{StaticResource AppFontFamily}"
+                 FontSize="13"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 WindowCornerPreference="Round"
+                 WindowStartupLocation="CenterOwner">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="도움말" />
+
+        <ScrollViewer Grid.Row="1" Margin="20,4,20,0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock FontSize="18" FontWeight="SemiBold" Text="Folder Spot 사용법" />
+                <TextBlock Margin="0,2,0,0"
+                           Opacity="0.6"
+                           Text="윈도우용 2분할 파일 탐색기. 빠른 검색·비교·일괄 작업에 최적화돼 있습니다."
+                           TextWrapping="Wrap" />
+
+                <TextBlock Margin="0,18,0,6" FontSize="15" FontWeight="SemiBold" Text="기본" />
+                <StackPanel>
+                    <TextBlock TextWrapping="Wrap" Text="• 좌·우 두 페인에서 각각 탭으로 여러 폴더를 엽니다. 페인 아무 곳이나 클릭하면 그 페인이 활성화됩니다." />
+                    <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Text="• 상단 주소창에 경로를 입력하거나, 좌측 드라이브·즐겨찾기에서 이동합니다." />
+                    <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Text="• 보기 모드(자세히·간단히·썸네일)와 테마는 상단 툴바에서 바꿉니다." />
+                    <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Text="• 닫기(X)는 트레이로 숨김입니다(인덱싱·핫키 유지). 완전 종료는 트레이 아이콘 메뉴에서." />
+                </StackPanel>
+
+                <TextBlock Margin="0,18,0,6" FontSize="15" FontWeight="SemiBold" Text="단축키" />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="160" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="Alt+Space" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Margin="0,3" Text="전역 검색 (파일·폴더·설치된 앱)" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="Alt+← / Alt+→" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Margin="0,3" Text="뒤로 / 앞으로" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="Alt+↑ / Backspace" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,3" Text="상위 폴더로" />
+                    <TextBlock Grid.Row="3" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="Ctrl+R" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Margin="0,3" Text="새로 고침" />
+                    <TextBlock Grid.Row="4" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="Ctrl+Shift+D" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Margin="0,3" Text="2분할 토글" />
+                    <TextBlock Grid.Row="5" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="F2" />
+                    <TextBlock Grid.Row="5" Grid.Column="1" Margin="0,3" Text="이름 바꾸기" />
+                    <TextBlock Grid.Row="6" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="Ctrl+Shift+R" />
+                    <TextBlock Grid.Row="6" Grid.Column="1" Margin="0,3" Text="일괄 이름 변경" />
+                    <TextBlock Grid.Row="7" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="Alt+Shift+S" />
+                    <TextBlock Grid.Row="7" Grid.Column="1" Margin="0,3" Text="폴더 크기 계산" />
+                    <TextBlock Grid.Row="8" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="F7" />
+                    <TextBlock Grid.Row="8" Grid.Column="1" Margin="0,3" Text="새 폴더" />
+                    <TextBlock Grid.Row="9" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="Ctrl+C / X / V" />
+                    <TextBlock Grid.Row="9" Grid.Column="1" Margin="0,3" Text="복사 / 잘라내기 / 붙여넣기" />
+                    <TextBlock Grid.Row="10" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="Del / Shift+Del" />
+                    <TextBlock Grid.Row="10" Grid.Column="1" Margin="0,3" Text="휴지통 / 영구 삭제" />
+                    <TextBlock Grid.Row="11" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="Enter" />
+                    <TextBlock Grid.Row="11" Grid.Column="1" Margin="0,3" Text="열기 / 폴더 진입" />
+                    <TextBlock Grid.Row="12" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="Ctrl+Q" />
+                    <TextBlock Grid.Row="12" Grid.Column="1" Margin="0,3" Text="미리보기 패널 토글" />
+                    <TextBlock Grid.Row="13" Grid.Column="0" Margin="0,3" FontWeight="SemiBold" Text="마우스 뒤로/앞으로" />
+                    <TextBlock Grid.Row="13" Grid.Column="1" Margin="0,3" Text="폴더 히스토리 이동" />
+                </Grid>
+
+                <TextBlock Margin="0,18,0,6" FontSize="15" FontWeight="SemiBold" Text="기능" />
+                <StackPanel>
+                    <TextBlock TextWrapping="Wrap" Text="• 두 페인 비교: 같은 이름 파일을 이쪽만(앰버)·최신(초록)·오래됨(파랑)으로 표시합니다." />
+                    <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Text="• 인라인 빠른 필터: 목록에서 바로 타이핑해 이름으로 거릅니다." />
+                    <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Text="• 압축/해제, '여기서 터미널 열기', 확장자별 글자색은 우클릭·설정에서 사용합니다." />
+                    <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Text="• 보호된 파일(암호화·AIP/IRM)은 이름 옆에 🔒로 표시됩니다." />
+                    <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Text="• 인덱싱 현황은 하단 상태바에 드라이브별로 표시됩니다(네트워크 폴더는 설정에서 지정 가능)." />
+                    <TextBlock Margin="0,3,0,0" TextWrapping="Wrap" Text="• 상단 빠른 실행 바: + 로 시작 메뉴에서 프로그램을 추가하고, 우클릭으로 이름 변경·제거합니다." />
+                </StackPanel>
+
+                <TextBlock Margin="0,18,0,12"
+                           Opacity="0.55"
+                           Text="자세한 내용·업데이트: github.com/teletobi00-rgb/folder-spot"
+                           TextWrapping="Wrap" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="2"
+                    Margin="20,12,20,16"
+                    HorizontalAlignment="Right"
+                    Orientation="Horizontal">
+            <ui:Button MinWidth="80"
+                       Appearance="Primary"
+                       Click="OnCloseClick"
+                       Content="닫기" />
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

@@ -100,6 +100,9 @@
                 <CheckBox Margin="0,4,0,0"
                           Content="상단 빠른 실행 바 표시 (자주 쓰는 프로그램)"
                           IsChecked="{Binding ShowProgramLauncher}" />
+                <CheckBox Margin="0,4,0,0"
+                          Content="하단바에 CPU·메모리 사용량 표시"
+                          IsChecked="{Binding ShowResourceMonitor}" />
 
                 <Separator Margin="0,16" />
 

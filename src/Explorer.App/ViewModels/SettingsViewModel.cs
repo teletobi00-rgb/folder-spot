@@ -30,6 +30,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _showProgramLauncher;
 
+    [ObservableProperty]
+    private bool _showResourceMonitor;
+
     /// <summary>저장이 실제로 적용됐는지(닫은 뒤 목록 새로고침 판단용).</summary>
     public bool Saved { get; private set; }
 
@@ -62,6 +65,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         FillNetworkFolders(current.NetworkIndexFolders);
         AutoStartOnBoot = _autoStart.IsEnabled;
         ShowProgramLauncher = current.ShowProgramLauncher;
+        ShowResourceMonitor = current.ShowResourceMonitor;
         FillRows(current.ExtensionColors);
     }
 
@@ -153,6 +157,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             IndexNetworkDrives = IndexNetworkDrives,
             NetworkIndexFolders = netFolders,
             ShowProgramLauncher = ShowProgramLauncher,
+            ShowResourceMonitor = ShowResourceMonitor,
             ExtensionColors = colors,
         });
         _theme.Apply(SelectedTheme);

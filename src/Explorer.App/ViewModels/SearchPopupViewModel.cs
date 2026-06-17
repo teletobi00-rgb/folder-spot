@@ -78,6 +78,22 @@ public sealed partial class SearchPopupViewModel : ObservableObject
     /// <summary>Ctrl+Enter — 항목이 들어있는 폴더를 열고 그 항목을 선택한다.</summary>
     public event EventHandler<(string Directory, string FullPath)>? RevealRequested;
 
+    /// <summary>검색 결과를 빠른 실행에 추가해달라는 신호 (대상 경로/URI, 표시이름).</summary>
+    public event EventHandler<(string Target, string Name)>? AddToQuickLaunchRequested;
+
+    /// <summary>우클릭 → 빠른 실행에 추가. 앱은 친숙한 이름으로, 파일·폴더는 경로만 저장한다.</summary>
+    [RelayCommand]
+    private void AddToQuickLaunch(SearchResultItemViewModel? item)
+    {
+        if (item is null)
+        {
+            return;
+        }
+
+        var name = item.IsApp ? item.Name : string.Empty;
+        AddToQuickLaunchRequested?.Invoke(this, (item.ActivationTarget, name));
+    }
+
     [RelayCommand]
     private void OpenSelected()
     {

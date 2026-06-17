@@ -50,26 +50,51 @@ public sealed partial class ProgramLauncherViewModel : ObservableObject
     }
 
     /// <summary>드롭/추가로 새 프로그램을 고정. 빈 값·중복은 무시.</summary>
-    public void Add(string command)
+    public void Add(string command) => AddPinned(command, customName: null);
+
+    /// <summary>대상 경로/URI와(선택) 사용자 지정 이름으로 고정. 빈 값·중복(대상 기준)은 무시.</summary>
+    public void AddPinned(string target, string? customName)
     {
-        if (string.IsNullOrWhiteSpace(command))
+        if (string.IsNullOrWhiteSpace(target))
         {
             return;
         }
 
-        var normalized = command.Trim().Trim('"');
+        var normalized = target.Trim().Trim('"');
         if (Items.Any(item => string.Equals(item.Command, normalized, StringComparison.OrdinalIgnoreCase)))
         {
             return;
         }
 
-        Items.Add(new PinnedProgramViewModel(normalized));
+        var name = string.IsNullOrWhiteSpace(customName) ? null : customName.Replace('|', ' ').Trim();
+        var stored = name is null ? normalized : name + "|" + normalized;
+        Items.Add(new PinnedProgramViewModel(stored));
+        Persist();
+    }
+
+    /// <summary>인라인 이름 변경 시작.</summary>
+    [RelayCommand]
+    private static void BeginRename(PinnedProgramViewModel? item)
+    {
+        if (item is not null)
+        {
+            item.EditName = item.DisplayName;
+            item.IsRenaming = true;
+        }
+    }
+
+    /// <summary>편집한 이름을 확정·저장한다.</summary>
+    public void CommitRename(PinnedProgramViewModel item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        item.ApplyRename(item.EditName);
+        item.IsRenaming = false;
         Persist();
     }
 
     private void Persist()
     {
-        var commands = Items.Select(item => item.Command).ToImmutableArray();
-        _settings.Update(settings => settings with { PinnedPrograms = commands });
+        var stored = Items.Select(item => item.ToStored()).ToImmutableArray();
+        _settings.Update(settings => settings with { PinnedPrograms = stored });
     }
 }

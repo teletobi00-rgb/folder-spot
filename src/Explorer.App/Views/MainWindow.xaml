@@ -212,6 +212,14 @@
                         <TextBlock VerticalAlignment="Center" Text="설정" />
                     </StackPanel>
                 </ui:Button>
+                <ui:Button Margin="4,0,0,0"
+                           Click="OnHelpClick"
+                           ToolTip="도움말 (사용법·단축키)">
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="QuestionCircle24" Margin="0,0,4,0" />
+                        <TextBlock VerticalAlignment="Center" Text="도움말" />
+                    </StackPanel>
+                </ui:Button>
             </StackPanel>
         </Grid>
 
@@ -234,6 +242,16 @@
                            FontSize="11"
                            Opacity="0.5"
                            Text="빠른 실행" />
+                <Button Margin="0,0,2,0"
+                        Padding="7,2"
+                        VerticalAlignment="Center"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Click="OnAddProgramClick"
+                        Content="+"
+                        Cursor="Hand"
+                        FontSize="15"
+                        ToolTip="시작 메뉴에서 프로그램 추가" />
                 <ItemsControl ItemsSource="{Binding ProgramLauncher.Items}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -253,6 +271,9 @@
                                     ToolTip="{Binding DisplayName}">
                                 <Button.ContextMenu>
                                     <ContextMenu>
+                                        <MenuItem Command="{Binding PlacementTarget.Tag.BeginRenameCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                                  CommandParameter="{Binding}"
+                                                  Header="이름 바꾸기" />
                                         <MenuItem Command="{Binding PlacementTarget.Tag.RemoveCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                                   CommandParameter="{Binding}"
                                                   Header="런처에서 제거" />
@@ -264,7 +285,18 @@
                                            Margin="0,0,5,0"
                                            VerticalAlignment="Center"
                                            Source="{Binding Icon}" />
-                                    <TextBlock VerticalAlignment="Center" Text="{Binding DisplayName}" />
+                                    <Grid VerticalAlignment="Center">
+                                        <TextBlock VerticalAlignment="Center"
+                                                   Text="{Binding DisplayName}"
+                                                   Visibility="{Binding IsRenaming, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                        <TextBox MinWidth="60"
+                                                 VerticalAlignment="Center"
+                                                 KeyDown="OnRenameKeyDown"
+                                                 Loaded="OnRenameBoxLoaded"
+                                                 LostFocus="OnRenameLostFocus"
+                                                 Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                                 Visibility="{Binding IsRenaming, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                    </Grid>
                                 </StackPanel>
                             </Button>
                         </DataTemplate>
@@ -596,6 +628,7 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" FontSize="12" Opacity="0.7">
                 <Run Text="{Binding Workspace.ActiveFileList.Items.Count, Mode=OneWay}" /><Run Text="개 항목" />
@@ -624,7 +657,16 @@
                            Text="{Binding IndexingStatus.Summary}"
                            TextTrimming="CharacterEllipsis" />
             </StackPanel>
+            <!-- CPU·메모리 사용량(옵트인) -->
             <TextBlock Grid.Column="3"
+                       Margin="16,0,0,0"
+                       VerticalAlignment="Center"
+                       FontSize="12"
+                       Opacity="0.7"
+                       Text="{Binding ResourceMonitor.Summary}"
+                       ToolTip="이 앱의 CPU·메모리 사용량"
+                       Visibility="{Binding ResourceMonitor.IsEnabled, Converter={StaticResource BooleanToVisibilityConverter}}" />
+            <TextBlock Grid.Column="4"
                        Margin="16,0,0,0"
                        FontSize="12"
                        Opacity="0.55"

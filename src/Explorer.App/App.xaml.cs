@@ -146,6 +146,8 @@ public partial class App : Application
         services.AddHostedService(provider => provider.GetRequiredService<IndexingService>());
         services.AddSingleton<IndexingStatusViewModel>();
         services.AddSingleton<IIndexingStatus>(provider => provider.GetRequiredService<IndexingStatusViewModel>());
+        services.AddSingleton<ResourceMonitorViewModel>();
+        services.AddSingleton<IResourceMonitor>(provider => provider.GetRequiredService<ResourceMonitorViewModel>());
 
         // 미리보기 렌더러 — 순서가 우선순위, 마지막 Info는 항상 처리하는 폴백.
         services.AddSingleton<IPreviewRenderer, ImagePreviewRenderer>();
@@ -243,6 +245,7 @@ public partial class App : Application
 
         // 호스티드 인덱싱 서비스가 시작될 때 옵트인 설정을 읽을 수 있도록 설정을 먼저 로드한다.
         var settings = _host.Services.GetRequiredService<ISettingsService>();
+        var settingsExisted = System.IO.File.Exists(AppPaths.SettingsFile);
         settings.Load();
 
         _host.Start();
@@ -270,6 +273,30 @@ public partial class App : Application
 
         SetUpGlobalSearch(window);
         Log.Information("Explorer 시작 완료");
+
+        MaybeShowWhatsNew(window, settings, settingsExisted);
+    }
+
+    /// <summary>업데이트 후 첫 실행이면 '새 기능' 창을 띄운다(신규 설치·노트 없음·이미 본 버전은 제외).</summary>
+    private static void MaybeShowWhatsNew(Window owner, ISettingsService settings, bool settingsExisted)
+    {
+        var current = AppInfo.Version;
+        if (string.IsNullOrEmpty(current)
+            || string.Equals(settings.Current.LastShownVersion, current, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        // 버전 기록은 항상 갱신해 다음 실행에 다시 뜨지 않게 한다.
+        settings.Update(s => s with { LastShownVersion = current });
+
+        // 신규 설치(설정 파일이 없던 경우)엔 띄우지 않고, 해당 버전 노트가 있을 때만 보여준다.
+        if (!settingsExisted || ReleaseNotes.ForVersion(current) is not { Count: > 0 } notes)
+        {
+            return;
+        }
+
+        new WhatsNewWindow(current, notes) { Owner = owner }.ShowDialog();
     }
 
     /// <summary>두 번째 인스턴스가 실행될 때 보내는 신호를 받아 기존 창을 다시 띄우는 백그라운드 리스너.</summary>
@@ -343,6 +370,8 @@ public partial class App : Application
                 Log.Warning(ex, "검색 결과 표시 실패: {Path}", target.FullPath);
             }
         };
+        popupViewModel.AddToQuickLaunchRequested += (_, e) =>
+            mainViewModel.ProgramLauncher.AddPinned(e.Target, string.IsNullOrEmpty(e.Name) ? null : e.Name);
 
         var keyMap = _host.Services.GetRequiredService<KeyMap>();
         var gesture = keyMap.GestureFor(KeyActions.GlobalSearch);

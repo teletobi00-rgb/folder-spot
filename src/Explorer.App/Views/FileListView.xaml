@@ -22,14 +22,14 @@
             <Separator />
             <MenuItem Command="{Binding DeleteSelectionCommand}" Header="삭제" InputGestureText="Del" />
             <MenuItem Command="{Binding BeginRenameCommand}" Header="이름 바꾸기" InputGestureText="F2" />
-            <MenuItem Click="OnBatchRenameClick" Header="일괄 이름 변경…" />
-            <MenuItem Command="{Binding CalculateFolderSizeCommand}" Header="폴더 크기 계산" />
+            <MenuItem Click="OnBatchRenameClick" Header="일괄 이름 변경…" InputGestureText="Ctrl+Shift+R" />
+            <MenuItem Command="{Binding CalculateFolderSizeCommand}" Header="폴더 크기 계산" InputGestureText="Alt+Shift+S" />
             <MenuItem Command="{Binding AddSelectionToFavoritesCommand}" Header="즐겨찾기에 추가" />
             <Separator />
             <MenuItem Command="{Binding CompressSelectionCommand}" Header="압축 (ZIP)" />
             <MenuItem Command="{Binding ExtractSelectionCommand}" Header="압축 풀기" />
             <Separator />
-            <MenuItem Click="OnShowNativeMenuClick" Header="Windows 메뉴 표시 (불안정 ⚠)" />
+            <MenuItem Click="OnShowNativeMenuClick" Header="Windows 메뉴 표시" />
             <MenuItem Click="OnShowPropertiesClick" Header="속성" />
         </ContextMenu>
 
@@ -133,6 +133,7 @@
                   PreviewKeyDown="OnFileListPreviewKeyDown"
                   PreviewMouseLeftButtonDown="OnPreviewMouseLeftButtonDown"
                   PreviewMouseMove="OnPreviewMouseMove"
+                  PreviewMouseLeftButtonUp="OnPreviewMouseLeftButtonUp"
                   MouseRightButtonUp="OnMouseRightButtonUp"
                   ContextMenuOpening="OnContextMenuOpening"
                   DragOver="OnDragOver"
@@ -266,6 +267,9 @@
                   ContextMenu="{StaticResource ItemContextMenu}"
                   MouseDoubleClick="OnItemDoubleClick"
                   SelectionChanged="OnSelectionChanged"
+                  PreviewMouseLeftButtonDown="OnPreviewMouseLeftButtonDown"
+                  PreviewMouseMove="OnPreviewMouseMove"
+                  PreviewMouseLeftButtonUp="OnPreviewMouseLeftButtonUp"
                   Visibility="{Binding ViewMode, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter='List,Thumbnails'}">
             <ListView.Style>
                 <Style TargetType="ListView">
@@ -289,6 +293,17 @@
                 </Style>
             </ListView.ItemContainerStyle>
         </ListView>
+
+        <!-- 드래그 영역 선택(마퀴) 사각형 — 마우스 이벤트는 통과시킨다 -->
+        <Canvas x:Name="MarqueeLayer" Grid.Row="1" IsHitTestVisible="False">
+            <Border x:Name="MarqueeBox"
+                    Background="{DynamicResource SystemAccentColorSecondaryBrush}"
+                    BorderBrush="{DynamicResource SystemAccentColorSecondaryBrush}"
+                    BorderThickness="1"
+                    CornerRadius="1"
+                    Opacity="0.35"
+                    Visibility="Collapsed" />
+        </Canvas>
 
         <!-- 로딩 오버레이 -->
         <Grid Grid.Row="1"

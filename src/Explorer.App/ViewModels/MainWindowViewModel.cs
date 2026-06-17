@@ -25,7 +25,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OperationQueueViewModel operationQueue,
         ProgramLauncherViewModel programLauncher,
         KeyMap keyMap,
-        IIndexingStatus indexingStatus)
+        IIndexingStatus indexingStatus,
+        IResourceMonitor resourceMonitor)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(themeService);
@@ -36,6 +37,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(programLauncher);
         ArgumentNullException.ThrowIfNull(keyMap);
         ArgumentNullException.ThrowIfNull(indexingStatus);
+        ArgumentNullException.ThrowIfNull(resourceMonitor);
         _settings = settings;
         _themeService = themeService;
         Workspace = workspace;
@@ -45,6 +47,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ProgramLauncher = programLauncher;
         KeyMap = keyMap;
         IndexingStatus = indexingStatus;
+        ResourceMonitor = resourceMonitor;
         AddressBar = new AddressBarViewModel();
         _currentTheme = settings.Current.Theme;
 
@@ -62,6 +65,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>인덱싱 진행 상태(상태바 표시용).</summary>
     public IIndexingStatus IndexingStatus { get; }
+
+    /// <summary>CPU·메모리 사용량(상태바 표시용, 옵트인).</summary>
+    public IResourceMonitor ResourceMonitor { get; }
 
     public DriveSidebarViewModel DriveSidebar { get; }
 

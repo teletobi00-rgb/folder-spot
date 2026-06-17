@@ -46,4 +46,10 @@ public sealed record AppSettings
 
     /// <summary>상단 빠른 실행 바에 고정된 프로그램(명령 또는 전체 경로). 기본: 계산기·명령 프롬프트·Edge.</summary>
     public ImmutableArray<string> PinnedPrograms { get; init; } = ["calc.exe", "cmd.exe", "msedge.exe"];
+
+    /// <summary>하단 상태바에 CPU·메모리 사용량을 표시할지(옵트인).</summary>
+    public bool ShowResourceMonitor { get; init; }
+
+    /// <summary>마지막으로 '새 기능' 안내를 보여준 앱 버전. 업데이트 후 첫 실행 감지에 사용(없으면 null).</summary>
+    public string? LastShownVersion { get; init; }
 }

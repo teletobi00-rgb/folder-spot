@@ -18,11 +18,28 @@ public partial class FileListView : UserControl
     private bool _suppressBackgroundMenuOnce;
     private Point _lastItemMenuScreenPoint;
     private ListViewItem? _dropHighlightedItem;
+    private bool _marqueePending;
+    private bool _marqueeActive;
+    private ListView? _marqueeList;
+    private Point _marqueeOrigin;
+
+    /// <summary>일괄 이름 변경 단축키용 RoutedCommand — 다이얼로그가 뷰를 필요로 해 코드비하인드에서 처리한다.</summary>
+    public static readonly RoutedUICommand BatchRenameCommand = new("일괄 이름 변경", "BatchRename", typeof(FileListView));
+
+    /// <summary>폴더 크기 계산 단축키용 RoutedCommand.</summary>
+    public static readonly RoutedUICommand FolderSizeCommand = new("폴더 크기 계산", "FolderSize", typeof(FileListView));
 
     public FileListView()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+
+        // B6 단축키: 일괄 이름 변경(Ctrl+Shift+R), 폴더 크기 계산(Alt+Shift+S).
+        // UserControl 레벨 InputBinding이라 어느 뷰(Details/List/Thumbnail)에서 포커스가 있든 동작한다.
+        CommandBindings.Add(new CommandBinding(BatchRenameCommand, (s, e) => OnBatchRenameClick(s, e)));
+        CommandBindings.Add(new CommandBinding(FolderSizeCommand, (_, _) => ViewModel?.CalculateFolderSizeCommand.Execute(null)));
+        InputBindings.Add(new KeyBinding(BatchRenameCommand, Key.R, ModifierKeys.Control | ModifierKeys.Shift));
+        InputBindings.Add(new KeyBinding(FolderSizeCommand, Key.S, ModifierKeys.Alt | ModifierKeys.Shift));
     }
 
     private FileListViewModel? ViewModel => DataContext as FileListViewModel;
@@ -179,9 +196,9 @@ public partial class FileListView : UserControl
 
     private void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (ViewModel is not null)
+        if (ViewModel is not null && sender is ListView list)
         {
-            ViewModel.SelectedItems = FileList.SelectedItems.Cast<FileItemViewModel>().ToArray();
+            ViewModel.SelectedItems = list.SelectedItems.Cast<FileItemViewModel>().ToArray();
         }
     }
 
@@ -190,19 +207,59 @@ public partial class FileListView : UserControl
     private void OnPreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         _dragStartPoint = e.GetPosition(this);
+        _marqueePending = false;
+        _marqueeActive = false;
 
-        // Shift/Ctrl 클릭은 다중 선택 제스처 — 드래그 시작으로 취급하면 선택 확장이 깨진다.
-        _dragStartedOnItem = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) == 0
-            && e.OriginalSource is DependencyObject source
+        var noModifier = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) == 0;
+        var onItem = e.OriginalSource is DependencyObject source
             && e.OriginalSource is not System.Windows.Controls.TextBox
             && FindAncestor<ListViewItem>(source) is not null;
+
+        // 항목 위 + 수식어 없음: 앱→탐색기 드래그 후보(드래그 시작으로 취급하면 선택 확장이 깨지므로 Shift/Ctrl 제외).
+        _dragStartedOnItem = noModifier && onItem;
+
+        // 빈 영역 + 수식어 없음: 드래그 영역 선택(마퀴) 후보. 임계 거리를 넘으면 시작한다.
+        if (!onItem && noModifier && sender is ListView list)
+        {
+            _marqueeList = list;
+            _marqueeOrigin = e.GetPosition(MarqueeLayer);
+            _marqueePending = true;
+        }
     }
 
     private void OnPreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (!_dragStartedOnItem
-            || e.LeftButton != MouseButtonState.Pressed
-            || ViewModel is not { SelectedItems.Count: > 0 } vm)
+        if (e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        // 마퀴(영역 선택) 시작/진행 — 빈 영역에서 임계 거리 넘게 드래그.
+        if ((_marqueePending || _marqueeActive) && _marqueeList is { } list)
+        {
+            if (!_marqueeActive)
+            {
+                var d = e.GetPosition(this) - _dragStartPoint;
+                if (Math.Abs(d.X) < SystemParameters.MinimumHorizontalDragDistance
+                    && Math.Abs(d.Y) < SystemParameters.MinimumVerticalDragDistance)
+                {
+                    return;
+                }
+
+                _marqueeActive = true;
+                list.Focus();
+                Mouse.Capture(list);
+                MarqueeBox.Visibility = Visibility.Visible;
+            }
+
+            UpdateMarqueeBox(e.GetPosition(MarqueeLayer));
+            UpdateMarqueeSelection(list);
+            e.Handled = true;
+            return;
+        }
+
+        // 항목 드래그(앱 → 탐색기/다른 곳).
+        if (!_dragStartedOnItem || ViewModel is not { SelectedItems.Count: > 0 } vm)
         {
             return;
         }
@@ -217,7 +274,63 @@ public partial class FileListView : UserControl
         _dragStartedOnItem = false;
         var paths = vm.SelectedItems.Select(i => i.Entry.FullPath).ToArray();
         var data = new DataObject(DataFormats.FileDrop, paths);
-        DragDrop.DoDragDrop(FileList, data, DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+        DragDrop.DoDragDrop(
+            sender as ListView ?? FileList, data,
+            DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+    }
+
+    private void OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_marqueeActive)
+        {
+            Mouse.Capture(null);
+            MarqueeBox.Visibility = Visibility.Collapsed;
+            e.Handled = true;
+        }
+
+        _marqueePending = false;
+        _marqueeActive = false;
+    }
+
+    private void UpdateMarqueeBox(Point current)
+    {
+        Canvas.SetLeft(MarqueeBox, Math.Min(_marqueeOrigin.X, current.X));
+        Canvas.SetTop(MarqueeBox, Math.Min(_marqueeOrigin.Y, current.Y));
+        MarqueeBox.Width = Math.Abs(current.X - _marqueeOrigin.X);
+        MarqueeBox.Height = Math.Abs(current.Y - _marqueeOrigin.Y);
+    }
+
+    private void UpdateMarqueeSelection(ListView list)
+    {
+        var rect = new Rect(
+            Canvas.GetLeft(MarqueeBox), Canvas.GetTop(MarqueeBox), MarqueeBox.Width, MarqueeBox.Height);
+
+        var selected = new List<object>();
+        for (var i = 0; i < list.Items.Count; i++)
+        {
+            if (list.ItemContainerGenerator.ContainerFromIndex(i) is ListViewItem { IsVisible: true } container)
+            {
+                var bounds = container
+                    .TransformToVisual(MarqueeLayer)
+                    .TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
+                if (rect.IntersectsWith(bounds))
+                {
+                    selected.Add(list.Items[i]);
+                }
+            }
+        }
+
+        // 선택이 실제로 바뀐 경우에만 갱신(SelectionChanged 폭주 방지).
+        if (selected.Count == list.SelectedItems.Count && selected.All(list.SelectedItems.Contains))
+        {
+            return;
+        }
+
+        list.SelectedItems.Clear();
+        foreach (var item in selected)
+        {
+            list.SelectedItems.Add(item);
+        }
     }
 
     // ─── 드롭 수신 (탐색기/다른 곳 → 앱) ─────────────────────────────────────────

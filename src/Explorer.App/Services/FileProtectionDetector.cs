@@ -5,26 +5,32 @@ using Explorer.Core.Caching;
 namespace Explorer.App.Services;
 
 /// <summary>
-/// 보호(암호화/AIP·IRM·권한 제한) 파일 감지:
+/// 보호(암호화/AIP·IRM·권한 제한) 파일 감지. <b>실제로 암호화/IRM 보호된 파일만</b> 표시한다(라벨만 붙은 건 제외).
 /// <list type="bullet">
-/// <item>OOXML(docx/xlsx/pptx 등): AIP/암호로 보호되면 ZIP이 아니라 CFBF(OLE 복합 문서, EncryptedPackage)로
-/// 저장되므로 헤더가 CFBF면 보호된 것이다.</item>
-/// <item>PDF: 트레일러에 <c>/Encrypt</c> 항목이 있으면 암호화/권한 제한(열기 암호 또는 소유자 권한 제한)이다.</item>
+/// <item>Office(OOXML·레거시 doc/xls/ppt): 암호화/AIP면 CFBF(OLE 복합 문서) 안에 EncryptedPackage·DataSpaces·
+/// EncryptionInfo 스트림이 생긴다. 일반 OOXML은 ZIP, 일반 레거시는 그 스트림이 없으므로 구분된다.</item>
+/// <item>PDF: AIP/IRM은 <c>/EncryptedPayload</c>·<c>/MicrosoftIRMService</c>(PDF 2.0 보호 래퍼), 표준 암호는
+/// 트레일러 <c>/Encrypt</c>로 표시된다.</item>
 /// </list>
-/// 결과는 경로+수정시각으로 캐시해 폴더 재진입·스크롤마다 파일을 다시 열지 않으며, 동시 검사를 제한해
-/// 보호 파일이 많은 폴더에서 디스크 IO가 폭주하지 않게 한다.
-/// (라벨만 있고 암호화 없는 OOXML, 레거시 doc/xls/ppt는 v1 범위 밖.)
+/// 결과는 경로+수정시각으로 캐시하고 동시 검사를 제한해 보호 파일이 많은 폴더에서도 IO가 폭주하지 않는다.
 /// </summary>
 public static class FileProtectionDetector
 {
-    private static readonly HashSet<string> OoxmlExtensions = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly HashSet<string> ProtectableExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
+        // OOXML
         "docx", "docm", "dotx", "dotm",
         "xlsx", "xlsm", "xlsb", "xltx", "xltm",
         "pptx", "pptm", "ppsx", "ppsm", "potx", "potm",
+        // 레거시 Office (항상 CFBF — 내부 EncryptedPackage/DataSpaces 유무로 판별)
+        "doc", "dot", "xls", "xlt", "xla", "ppt", "pot", "pps", "ppa",
+        // PDF
+        "pdf",
     };
 
     private static ReadOnlySpan<byte> CfbfSignature => [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+
+    private static ReadOnlySpan<byte> PdfSignature => "%PDF-"u8;
 
     // 보호 검사 결과 캐시(경로+수정시각 키) — 폴더 재진입·재생성 시 같은 파일을 다시 열지 않는다.
     private static readonly LruCache<string, bool> Cache = new(capacity: 4096);
@@ -32,11 +38,9 @@ public static class FileProtectionDetector
     // 동시 파일 오픈 제한 — 보호 파일이 많은 폴더에서 스레드풀/디스크 IO 폭주 방지(비동기 대기라 풀 스레드를 막지 않음).
     private static readonly SemaphoreSlim Gate = new(4, 4);
 
-    /// <summary>헤더를 읽지 않고 빠르게 — 보호 가능성이 있는 형식(OOXML 또는 PDF)인지.</summary>
+    /// <summary>헤더를 읽지 않고 빠르게 — 보호 가능성이 있는 형식(Office 또는 PDF)인지.</summary>
     public static bool MaybeProtectable(string extensionWithoutDot) =>
-        !string.IsNullOrEmpty(extensionWithoutDot)
-        && (OoxmlExtensions.Contains(extensionWithoutDot)
-            || string.Equals(extensionWithoutDot, "pdf", StringComparison.OrdinalIgnoreCase));
+        !string.IsNullOrEmpty(extensionWithoutDot) && ProtectableExtensions.Contains(extensionWithoutDot);
 
     /// <summary>
     /// 보호 여부를 캐시 + 동시성 제한을 거쳐 검사한다. UI 경로용 — 세마포어 대기는 비동기라 스레드를 막지 않고,
@@ -58,13 +62,12 @@ public static class FileProtectionDetector
         await Gate.WaitAsync().ConfigureAwait(false);
         try
         {
-            // 대기 중 다른 호출이 채웠을 수 있으니 한 번 더 확인.
             if (Cache.TryGet(key, out cached))
             {
                 return cached;
             }
 
-            var result = await Task.Run(() => Detect(path, extensionWithoutDot)).ConfigureAwait(false);
+            var result = await Task.Run(() => Detect(path)).ConfigureAwait(false);
             Cache.Set(key, result);
             return result;
         }
@@ -76,16 +79,27 @@ public static class FileProtectionDetector
 
     /// <summary>캐시·동시성 제한 없이 즉시 검사한다(주로 테스트용). UI 경로는 <see cref="IsProtectedAsync"/>를 쓴다.</summary>
     public static bool IsProtected(string path, string extensionWithoutDot) =>
-        MaybeProtectable(extensionWithoutDot) && Detect(path, extensionWithoutDot);
+        MaybeProtectable(extensionWithoutDot) && Detect(path);
 
-    private static bool Detect(string path, string extensionWithoutDot)
+    /// <summary>매직 바이트로 형식을 판별해 분기한다 — 확장자가 아니라 실제 내용으로 판단(예: AIP가 .pdf를 CFBF로 감싸도 잡힘).</summary>
+    private static bool Detect(string path)
     {
         try
         {
             using var stream = File.OpenRead(path);
-            return string.Equals(extensionWithoutDot, "pdf", StringComparison.OrdinalIgnoreCase)
-                ? IsEncryptedPdf(stream)
-                : IsCfbf(stream);
+            Span<byte> magic = stackalloc byte[8];
+            var read = stream.ReadAtLeast(magic, 8, throwOnEndOfStream: false);
+            if (read >= 8 && magic.SequenceEqual(CfbfSignature))
+            {
+                return CompoundFileProbe.HasEncryptionStream(stream);
+            }
+
+            if (read >= PdfSignature.Length && magic[..PdfSignature.Length].SequenceEqual(PdfSignature))
+            {
+                return PdfHasProtection(stream);
+            }
+
+            return false; // 일반 OOXML(ZIP) 등 — 보호 아님
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -93,49 +107,38 @@ public static class FileProtectionDetector
         }
     }
 
-    private static bool IsCfbf(Stream stream)
-    {
-        Span<byte> header = stackalloc byte[8];
-        return stream.ReadAtLeast(header, 8, throwOnEndOfStream: false) >= 8
-            && header.SequenceEqual(CfbfSignature);
-    }
-
-    private static ReadOnlySpan<byte> EncryptToken => "/Encrypt"u8;
-
     /// <summary>
-    /// PDF 암호화 판정: 선두 1KB에서 <c>%PDF-</c> 시그니처를 확인하고(여기서 선형화 PDF의 앞쪽 /Encrypt도 커버),
-    /// 트레일러가 있는 파일 끝 64KB에서 <c>/Encrypt</c> 토큰을 찾는다. 암호화된 PDF는 트레일러가 암호화 딕셔너리를
-    /// <c>/Encrypt n g R</c>로 참조한다. 배지 표시 목적이라 존재 여부만 본다(권한 플래그 파싱은 하지 않음).
+    /// PDF 보호 판정: 앞부분(보호 래퍼 구조)에서 <c>/EncryptedPayload</c>·<c>/MicrosoftIRMService</c>(AIP/IRM),
+    /// 트레일러(끝부분)에서 <c>/Encrypt</c>(표준 암호)를 찾는다. 네트워크 파일을 고려해 큰 창이지만 상한을 둔다.
     /// </summary>
-    private static bool IsEncryptedPdf(Stream stream)
+    private static bool PdfHasProtection(Stream stream)
     {
         var length = stream.Length;
-        if (length < 8)
-        {
-            return false;
-        }
-
-        // 1) 선두: %PDF- 시그니처(선두 1KB 내) + 선형화 PDF의 앞쪽 /Encrypt.
-        var headSize = (int)Math.Min(1024, length);
+        var headSize = (int)Math.Min(256 * 1024, length);
         var head = new byte[headSize];
         stream.Seek(0, SeekOrigin.Begin);
-        stream.ReadExactly(head, 0, headSize);
-        if (head.AsSpan().IndexOf("%PDF-"u8) < 0)
+        if (stream.ReadAtLeast(head, headSize, throwOnEndOfStream: false) < headSize)
         {
             return false;
         }
 
-        if (head.AsSpan().IndexOf(EncryptToken) >= 0)
+        var headSpan = head.AsSpan();
+        if (headSpan.IndexOf("/EncryptedPayload"u8) >= 0 || headSpan.IndexOf("/MicrosoftIRMService"u8) >= 0)
         {
             return true;
         }
 
-        // 2) 트레일러(파일 끝 64KB)에서 /Encrypt 검색.
-        const int TailWindow = 64 * 1024;
-        var tailSize = (int)Math.Min(TailWindow, length);
+        if (length <= headSize)
+        {
+            // 작은 파일: 전체가 head에 들어왔으니 표준 암호 /Encrypt도 여기서 확인.
+            return headSpan.IndexOf("/Encrypt"u8) >= 0;
+        }
+
+        // 큰 파일: 트레일러(끝 128KB)에서 /Encrypt.
+        var tailSize = (int)Math.Min(128 * 1024, length);
         var tail = new byte[tailSize];
         stream.Seek(length - tailSize, SeekOrigin.Begin);
-        stream.ReadExactly(tail, 0, tailSize);
-        return tail.AsSpan().IndexOf(EncryptToken) >= 0;
+        return stream.ReadAtLeast(tail, tailSize, throwOnEndOfStream: false) >= tailSize
+            && tail.AsSpan().IndexOf("/Encrypt"u8) >= 0;
     }
 }

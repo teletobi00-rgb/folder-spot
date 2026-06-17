@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using Explorer.App.ViewModels;
 using Serilog;
@@ -10,6 +11,8 @@ public partial class SearchPopupWindow : FluentWindow
 {
     private readonly SearchPopupViewModel _viewModel;
 
+    private bool _contextMenuOpen;
+
     public SearchPopupWindow(SearchPopupViewModel viewModel)
     {
         ArgumentNullException.ThrowIfNull(viewModel);
@@ -17,6 +20,10 @@ public partial class SearchPopupWindow : FluentWindow
         DataContext = viewModel;
         InitializeComponent();
         _viewModel.HideRequested += (_, _) => Hide();
+
+        // 컨텍스트 메뉴가 열리면 창이 비활성화되며 OnDeactivated가 팝업을 숨길 수 있으므로, 열림 동안 숨김을 막는다.
+        AddHandler(ContextMenuOpeningEvent, new ContextMenuEventHandler((_, _) => _contextMenuOpen = true), handledEventsToo: true);
+        AddHandler(ContextMenuClosingEvent, new ContextMenuEventHandler((_, _) => _contextMenuOpen = false), handledEventsToo: true);
     }
 
     /// <summary>전역 핫키 진입점 — 보이면 숨기고, 숨겨져 있으면 화면 중앙 상단에 띄운다.</summary>
@@ -86,7 +93,21 @@ public partial class SearchPopupWindow : FluentWindow
 
     private void OnDeactivated(object? sender, EventArgs e)
     {
+        // 컨텍스트 메뉴가 열려 있으면 숨기지 않는다(메뉴 항목을 고를 기회 보장).
+        if (_contextMenuOpen)
+        {
+            return;
+        }
+
         // 포커스를 잃으면 런처처럼 사라진다 (종료 아님 — 핫키로 즉시 재호출 가능)
         Hide();
+    }
+
+    private void OnAddToQuickLaunchClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: SearchResultItemViewModel item })
+        {
+            _viewModel.AddToQuickLaunchCommand.Execute(item);
+        }
     }
 }

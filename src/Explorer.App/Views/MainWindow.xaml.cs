@@ -64,6 +64,7 @@ public partial class MainWindow : FluentWindow
                 e.Cancel = true;
                 Hide();
                 TrimMemoryWhenHidden();
+                App.Services.GetService<ResourceMonitorViewModel>()?.Pause();
                 ShowTrayNoticeOnce();
                 return;
             }
@@ -149,6 +150,7 @@ public partial class MainWindow : FluentWindow
         }
 
         Activate();
+        App.Services.GetService<ResourceMonitorViewModel>()?.Resume();
     }
 
     /// <summary>중앙 키맵(keymap.json 오버라이드 포함)으로 윈도우 키 바인딩을 구성한다.</summary>
@@ -232,8 +234,65 @@ public partial class MainWindow : FluentWindow
             // 툴바 테마 토글 상태를 설정 창 변경과 동기화하고, 색상 즉시 반영을 위해 양쪽 페인 새로고침.
             _viewModel.SyncThemeFromSettings();
             _viewModel.ProgramLauncher.SyncVisibilityFromSettings();
+            App.Services.GetService<ResourceMonitorViewModel>()?.SyncFromSettings();
             _viewModel.Workspace.LeftPane.FileList.RefreshCommand.Execute(null);
             _viewModel.Workspace.RightPane.FileList.RefreshCommand.Execute(null);
+        }
+    }
+
+    private void OnHelpClick(object sender, RoutedEventArgs e)
+    {
+        var help = new HelpWindow { Owner = this };
+        help.ShowDialog();
+    }
+
+    private void OnAddProgramClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "빠른 실행에 추가할 프로그램 선택",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Programs),
+            Filter = "바로가기·실행 파일 (*.lnk;*.exe)|*.lnk;*.exe|모든 파일 (*.*)|*.*",
+        };
+        if (dialog.ShowDialog(this) == true)
+        {
+            _viewModel.ProgramLauncher.Add(dialog.FileName);
+        }
+    }
+
+    private void OnRenameBoxLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox box)
+        {
+            box.Focus();
+            box.SelectAll();
+        }
+    }
+
+    private void OnRenameKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.TextBox { DataContext: PinnedProgramViewModel item })
+        {
+            return;
+        }
+
+        if (e.Key == Key.Enter)
+        {
+            _viewModel.ProgramLauncher.CommitRename(item);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            item.IsRenaming = false;
+            e.Handled = true;
+        }
+    }
+
+    private void OnRenameLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox { DataContext: PinnedProgramViewModel item } && item.IsRenaming)
+        {
+            _viewModel.ProgramLauncher.CommitRename(item);
         }
     }
 

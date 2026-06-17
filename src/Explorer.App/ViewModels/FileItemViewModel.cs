@@ -137,9 +137,10 @@ public sealed partial class FileItemViewModel : ObservableObject
 
     private async Task CheckProtectionAsync()
     {
-        var path = Entry.FullPath;
-        var extension = Entry.Extension;
-        var result = await Task.Run(() => Explorer.App.Services.FileProtectionDetector.IsProtected(path, extension))
+        // 캐시(경로+수정시각)와 동시성 제한은 감지기 내부에서 처리한다 — 폴더 재진입마다 재오픈하지 않고,
+        // 보호 파일이 많은 폴더에서도 IO가 폭주하지 않는다.
+        var result = await Explorer.App.Services.FileProtectionDetector
+            .IsProtectedAsync(Entry.FullPath, Entry.Extension, Entry.DateModified.Ticks)
             .ConfigureAwait(true);
         if (result)
         {

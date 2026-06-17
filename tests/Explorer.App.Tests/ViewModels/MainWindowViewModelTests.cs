@@ -32,7 +32,7 @@ public sealed class MainWindowViewModelTests
         var programLauncher = new ProgramLauncherViewModel(_context.Settings);
         return new MainWindowViewModel(
             _context.Settings, _themeService, workspace, sidebar, favorites, operationQueue, programLauncher,
-            KeyMap.CreateDefault());
+            KeyMap.CreateDefault(), Substitute.For<IIndexingStatus>());
     }
 
     [Fact]

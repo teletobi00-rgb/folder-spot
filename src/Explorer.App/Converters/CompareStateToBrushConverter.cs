@@ -5,13 +5,13 @@ using Explorer.App.ViewModels;
 
 namespace Explorer.App.Converters;
 
-/// <summary>비교 상태 → 행 배경 반투명 틴트. 반투명이라 다크/라이트 배경 위에서 모두 자연스럽다.</summary>
+/// <summary>비교 상태 → 마커(세로 라인·도트) 색. 불투명 단색이라 다크/라이트 배경 위에서 모두 또렷하다.</summary>
 public sealed class CompareStateToBrushConverter : IValueConverter
 {
-    // alpha ~0x30 틴트.
-    private static readonly SolidColorBrush OnlyHere = Frozen(0x30, 0xFF, 0xA5, 0x00); // 앰버 — 이쪽에만
-    private static readonly SolidColorBrush Newer = Frozen(0x30, 0x3C, 0xC8, 0x4A);    // 초록 — 이쪽이 최신
-    private static readonly SolidColorBrush Older = Frozen(0x28, 0x4A, 0x90, 0xE2);    // 파랑 — 이쪽이 오래됨
+    // 4px 세로 라인 / 8px 도트 배지용 불투명 단색.
+    private static readonly SolidColorBrush OnlyHere = Frozen(0xFF, 0xFF, 0xA5, 0x00); // 앰버 — 이쪽에만
+    private static readonly SolidColorBrush Newer = Frozen(0xFF, 0x3C, 0xC8, 0x4A);    // 초록 — 이쪽이 최신
+    private static readonly SolidColorBrush Older = Frozen(0xFF, 0x4A, 0x90, 0xE2);    // 파랑 — 이쪽이 오래됨
     private static readonly SolidColorBrush None = Brushes.Transparent;
 
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>

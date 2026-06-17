@@ -79,6 +79,14 @@ public partial class MainWindow : FluentWindow
         RightPaneView.AddHandler(GotKeyboardFocusEvent, new KeyboardFocusChangedEventHandler(
             (_, _) => _viewModel.Workspace.SetActiveSide(PaneSide.Right)), handledEventsToo: true);
 
+        // 페인 어디든(빈 공간·행·탭 스트립) 마우스를 누르면 그 페인을 활성화한다. 포커스 진입(GotKeyboardFocus)만으로는
+        // 빈 영역 클릭이 잡히지 않으므로 보완. SetActiveSide만 호출(Focus() 안 함)해 이름 변경/필터 입력 박스를 방해하지 않고,
+        // handledEventsToo로 자식이 이벤트를 먹어도(스크롤바·컨텍스트 메뉴 등) 활성화는 동작한다.
+        LeftPaneView.AddHandler(PreviewMouseDownEvent, new MouseButtonEventHandler(
+            (_, _) => _viewModel.Workspace.SetActiveSide(PaneSide.Left)), handledEventsToo: true);
+        RightPaneView.AddHandler(PreviewMouseDownEvent, new MouseButtonEventHandler(
+            (_, _) => _viewModel.Workspace.SetActiveSide(PaneSide.Right)), handledEventsToo: true);
+
         LeftPaneView.CrossPaneTabDropRequested += OnCrossPaneTabDrop;
         RightPaneView.CrossPaneTabDropRequested += OnCrossPaneTabDrop;
 

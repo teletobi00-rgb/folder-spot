@@ -39,6 +39,14 @@
                         Margin="2,1"
                         Orientation="Horizontal"
                         ToolTip="{Binding Name}">
+                <!-- 비교 상태 세로 라인 -->
+                <Border Width="4"
+                        Height="14"
+                        Margin="0,0,4,0"
+                        VerticalAlignment="Center"
+                        Background="{Binding CompareState, Converter={StaticResource CompareStateToBrushConverter}}"
+                        CornerRadius="1.5"
+                        Visibility="{Binding CompareState, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter='OnlyHere,Newer,Older'}" />
                 <Image Width="16"
                        Height="16"
                        Margin="0,0,6,0"
@@ -53,21 +61,40 @@
 
         <!-- 썸네일 셀: 미리보기 이미지 + 이름. 크기는 페인의 ThumbnailSize -->
         <DataTemplate x:Key="ThumbnailItemTemplate">
-            <StackPanel Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListView}}"
-                        Margin="6"
-                        ToolTip="{Binding Name}">
-                <Image Height="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListView}}"
-                       RenderOptions.BitmapScalingMode="HighQuality"
-                       Source="{Binding Thumbnail}"
-                       Stretch="Uniform" />
-                <TextBlock Margin="0,4,0,0"
+            <Grid Width="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListView}}"
+                  Margin="6"
+                  ToolTip="{Binding Name}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                
+                <Grid Grid.Row="0" Height="{Binding DataContext.ThumbnailSize, RelativeSource={RelativeSource AncestorType=ListView}}">
+                    <Image RenderOptions.BitmapScalingMode="HighQuality"
+                           Source="{Binding Thumbnail}"
+                           Stretch="Uniform" />
+                    <!-- 비교 상태 도트 배지 -->
+                    <Border Width="8"
+                            Height="8"
+                            Margin="4"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Background="{Binding CompareState, Converter={StaticResource CompareStateToBrushConverter}}"
+                            BorderBrush="White"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Visibility="{Binding CompareState, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter='OnlyHere,Newer,Older'}" />
+                </Grid>
+                
+                <TextBlock Grid.Row="1"
+                           Margin="0,4,0,0"
                            MaxHeight="32"
                            Foreground="{Binding Extension, Converter={StaticResource ExtensionColorConverter}}"
                            Text="{Binding Name}"
                            TextAlignment="Center"
                            TextTrimming="CharacterEllipsis"
                            TextWrapping="Wrap" />
-            </StackPanel>
+            </Grid>
         </DataTemplate>
     </UserControl.Resources>
     <Grid>
@@ -121,8 +148,6 @@
                     <!-- 확장자 색이 없는 항목(폴더·dll 등)이 상속받을 기본 글자색 — 다크/라이트 적응.
                          확장자 색이 있는 항목은 이름 TextBlock이 이 값을 덮어쓴다. -->
                     <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-                    <!-- 두 페인 비교 시 행 배경 틴트(반투명). 비교 안 하면 투명. -->
-                    <Setter Property="Background" Value="{Binding CompareState, Converter={StaticResource CompareStateToBrushConverter}}" />
                 </Style>
             </ListView.ItemContainerStyle>
             <ListView.Resources>
@@ -168,6 +193,14 @@
                         <GridViewColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel Opacity="{Binding NameOpacity}" Orientation="Horizontal">
+                                    <!-- 비교 상태 세로 라인 -->
+                                    <Border Width="4"
+                                            Height="14"
+                                            Margin="0,0,6,0"
+                                            VerticalAlignment="Center"
+                                            Background="{Binding CompareState, Converter={StaticResource CompareStateToBrushConverter}}"
+                                            CornerRadius="1.5"
+                                            Visibility="{Binding CompareState, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter='OnlyHere,Newer,Older'}" />
                                     <Image Width="14"
                                            Height="14"
                                            Margin="0,0,6,0"
@@ -177,7 +210,7 @@
                                                VerticalAlignment="Center"
                                                FontSize="11"
                                                Text="🔒"
-                                               ToolTip="보호된 파일 (암호화/AIP)"
+                                               ToolTip="보호된 파일 (암호화/AIP/PDF)"
                                                Visibility="{Binding IsProtected, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                     <TextBlock VerticalAlignment="Center"
                                                Foreground="{Binding Extension, Converter={StaticResource ExtensionColorConverter}}"
@@ -253,21 +286,20 @@
                 <Style TargetType="ListViewItem">
                     <Setter Property="Margin" Value="0" />
                     <Setter Property="Padding" Value="2" />
-                    <Setter Property="Background" Value="{Binding CompareState, Converter={StaticResource CompareStateToBrushConverter}}" />
                 </Style>
             </ListView.ItemContainerStyle>
         </ListView>
 
         <!-- 로딩 오버레이 -->
-        <Border Grid.Row="1"
-                Background="Transparent"
-                Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+        <Grid Grid.Row="1"
+              Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Border Background="{DynamicResource ApplicationBackgroundBrush}" Opacity="0.55" />
             <ui:ProgressRing IsIndeterminate="True"
                              Width="48"
                              Height="48"
                              HorizontalAlignment="Center"
                              VerticalAlignment="Center" />
-        </Border>
+        </Grid>
 
         <!-- 빈 폴더/오류 상태 -->
         <TextBlock x:Name="StatusText"

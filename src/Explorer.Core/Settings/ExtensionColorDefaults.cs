@@ -9,24 +9,47 @@ namespace Explorer.Core.Settings;
 public static class ExtensionColorDefaults
 {
     public static ImmutableDictionary<string, string> Map { get; } = BuildDefaults();
+    public static ImmutableDictionary<string, string> DarkMap { get; } = BuildDarkDefaults();
+    public static ImmutableDictionary<string, string> LightMap { get; } = BuildLightDefaults();
 
     private static ImmutableDictionary<string, string> BuildDefaults()
     {
         var builder = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // 엑셀 — 녹색 계열
+        // 기본 맵은 중간값 유지 (하위 호환성용)
         AddAll(builder, "#1FA463", "xlsx", "xls", "xlsm", "xlsb", "xltx", "xlt", "csv");
-        // 워드 — 푸른색 계열
         AddAll(builder, "#4178D4", "docx", "doc", "docm", "dotx", "dot", "rtf", "hwp", "hwpx");
-        // 파워포인트 — 주황 계열
         AddAll(builder, "#E8730C", "pptx", "ppt", "pptm", "ppsx", "pps");
-        // PDF — 붉은 계열
         AddAll(builder, "#E0492E", "pdf");
-        // 이미지 — 보라 계열
         AddAll(builder, "#B06FD6", "png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "ico", "tif", "tiff");
-        // 압축 — 황갈 계열
         AddAll(builder, "#C9952B", "zip", "7z", "rar", "tar", "gz", "bz2");
 
+        return builder.ToImmutable();
+    }
+
+    private static ImmutableDictionary<string, string> BuildDarkDefaults()
+    {
+        var builder = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase);
+        // 다크 테마: 밝고 맑은 파스텔 톤
+        AddAll(builder, "#21A366", "xlsx", "xls", "xlsm", "xlsb", "xltx", "xlt", "csv");
+        AddAll(builder, "#5C93FC", "docx", "doc", "docm", "dotx", "dot", "rtf", "hwp", "hwpx");
+        AddAll(builder, "#F28C38", "pptx", "ppt", "pptm", "ppsx", "pps");
+        AddAll(builder, "#F25F4C", "pdf");
+        AddAll(builder, "#C88AFA", "png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "ico", "tif", "tiff");
+        AddAll(builder, "#D4A33B", "zip", "7z", "rar", "tar", "gz", "bz2");
+        return builder.ToImmutable();
+    }
+
+    private static ImmutableDictionary<string, string> BuildLightDefaults()
+    {
+        var builder = ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase);
+        // 라이트 테마: 가독성을 위해 더 깊고 짙은 톤
+        AddAll(builder, "#107C41", "xlsx", "xls", "xlsm", "xlsb", "xltx", "xlt", "csv");
+        AddAll(builder, "#185ABD", "docx", "doc", "docm", "dotx", "dot", "rtf", "hwp", "hwpx");
+        AddAll(builder, "#C45500", "pptx", "ppt", "pptm", "ppsx", "pps");
+        AddAll(builder, "#B32A15", "pdf");
+        AddAll(builder, "#8544B3", "png", "jpg", "jpeg", "gif", "bmp", "webp", "svg", "ico", "tif", "tiff");
+        AddAll(builder, "#9E6E13", "zip", "7z", "rar", "tar", "gz", "bz2");
         return builder.ToImmutable();
     }
 

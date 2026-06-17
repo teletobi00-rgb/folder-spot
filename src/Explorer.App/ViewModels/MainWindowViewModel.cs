@@ -24,7 +24,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         FavoritesViewModel favorites,
         OperationQueueViewModel operationQueue,
         ProgramLauncherViewModel programLauncher,
-        KeyMap keyMap)
+        KeyMap keyMap,
+        IIndexingStatus indexingStatus)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(themeService);
@@ -34,6 +35,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ArgumentNullException.ThrowIfNull(operationQueue);
         ArgumentNullException.ThrowIfNull(programLauncher);
         ArgumentNullException.ThrowIfNull(keyMap);
+        ArgumentNullException.ThrowIfNull(indexingStatus);
         _settings = settings;
         _themeService = themeService;
         Workspace = workspace;
@@ -42,6 +44,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OperationQueue = operationQueue;
         ProgramLauncher = programLauncher;
         KeyMap = keyMap;
+        IndexingStatus = indexingStatus;
         AddressBar = new AddressBarViewModel();
         _currentTheme = settings.Current.Theme;
 
@@ -56,6 +59,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     public WorkspaceViewModel Workspace { get; }
+
+    /// <summary>인덱싱 진행 상태(상태바 표시용).</summary>
+    public IIndexingStatus IndexingStatus { get; }
 
     public DriveSidebarViewModel DriveSidebar { get; }
 

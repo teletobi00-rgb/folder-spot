@@ -156,7 +156,8 @@ public sealed partial class SearchPopupViewModel : ObservableObject
     /// <summary>팝업이 표시될 때 호출 — 직전 질의를 다시 보여주되 전체 선택 상태로.</summary>
     public void OnShown()
     {
-        StatusText = $"{_catalog.Count:N0}개 항목 인덱싱됨";
+        // 캐시 값을 읽어 UI 스레드가 인덱스 락(쓰기 배치 뒤에서 대기 가능)을 잡지 않게 한다.
+        StatusText = $"{_catalog.LastKnownCount:N0}개 항목 인덱싱됨";
     }
 
     async partial void OnQueryChanged(string value)

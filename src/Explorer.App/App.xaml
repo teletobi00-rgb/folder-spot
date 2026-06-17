@@ -9,12 +9,17 @@
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- 다크테마에서 행 호버가 밝게 떠 흰 글씨가 안 보이던 문제 보정: WPF-UI 기본 호버 브러시
+                 (ListViewItemBackgroundPointerOver)를 테마 적응형(다크=어둡게/라이트=밝게) 오버레이로 덮어
+                 글자 대비를 확보한다. 루트 사전 선언이라 머지 사전을 가리고, Color가 DynamicResource라 테마 전환을 따라간다.
+                 전역 적용이라 파일 목록·즐겨찾기·드라이브 사이드바의 호버가 일관되게 보정된다. -->
+            <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="{DynamicResource ControlFillColorSecondaryColor}" />
             <!-- 앱 기본 글꼴: 번들 Pretendard → (미로드 시) 시스템 Noto Sans KR → Segoe UI 순 폴백 -->
             <FontFamily x:Key="AppFontFamily">pack://application:,,,/Explorer.App;component/Assets/Fonts/#Pretendard, Noto Sans KR, Segoe UI Variable Text, Segoe UI</FontFamily>
 
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <converters:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
-            <converters:ActiveSideToBrushConverter x:Key="ActiveSideToBrushConverter" />
             <converters:CountToVisibilityConverter x:Key="CountToVisibilityConverter" />
             <converters:PreviewKindToVisibilityConverter x:Key="PreviewKindToVisibilityConverter" />
             <converters:FileSizeConverter x:Key="FileSizeConverter" />

@@ -49,23 +49,41 @@
                 </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <StackPanel Orientation="Horizontal" ToolTip="{Binding Path}">
-                            <TextBlock MaxWidth="88"
-                                       VerticalAlignment="Center"
-                                       FontSize="12"
-                                       Text="{Binding Title}"
-                                       TextTrimming="CharacterEllipsis" />
-                            <Button Margin="4,0,0,0"
-                                    Padding="3,0"
-                                    VerticalAlignment="Center"
+                        <Grid ToolTip="{Binding Path}">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="2" />
+                            </Grid.RowDefinitions>
+                            
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="4,2">
+                                <TextBlock MaxWidth="88"
+                                           VerticalAlignment="Center"
+                                           FontSize="12"
+                                           Text="{Binding Title}"
+                                           TextTrimming="CharacterEllipsis" />
+                                <Button Margin="4,0,0,0"
+                                        Padding="3,0"
+                                        VerticalAlignment="Center"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                        CommandParameter="{Binding}"
+                                        Content="✕"
+                                        FontSize="9"
+                                        ToolTip="탭 닫기 (Ctrl+W)" />
+                            </StackPanel>
+                            
+                            <Border x:Name="Indicator"
+                                    Grid.Row="1"
+                                    Height="2"
                                     Background="Transparent"
-                                    BorderThickness="0"
-                                    Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                    CommandParameter="{Binding}"
-                                    Content="✕"
-                                    FontSize="9"
-                                    ToolTip="탭 닫기 (Ctrl+W)" />
-                        </StackPanel>
+                                    CornerRadius="1" />
+                        </Grid>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                <Setter TargetName="Indicator" Property="Background" Value="{DynamicResource SystemAccentColorSecondaryBrush}" />
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

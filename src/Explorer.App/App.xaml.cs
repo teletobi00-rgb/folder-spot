@@ -141,6 +141,8 @@ public partial class App : Application
         });
         services.AddSingleton<IndexingService>();
         services.AddHostedService(provider => provider.GetRequiredService<IndexingService>());
+        services.AddSingleton<IndexingStatusViewModel>();
+        services.AddSingleton<IIndexingStatus>(provider => provider.GetRequiredService<IndexingStatusViewModel>());
 
         // 미리보기 렌더러 — 순서가 우선순위, 마지막 Info는 항상 처리하는 폴백.
         services.AddSingleton<IPreviewRenderer, ImagePreviewRenderer>();

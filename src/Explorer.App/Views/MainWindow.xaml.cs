@@ -95,6 +95,15 @@ public partial class MainWindow : FluentWindow
         PreviewMouseDown += OnNavigationMouseButton;
     }
 
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+
+        // 혹시 관리자 권한으로 실행됐다면, 일반 권한 탐색기에서 끌어온 드롭이 UIPI에 막히지 않도록
+        // 드래그앤드롭 메시지를 이 창에 한해 허용한다(권한 상승 안 했으면 무해).
+        DragDropMessageFilter.Allow(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+    }
+
     /// <summary>트레이로 처음 숨길 때 1회 — 백그라운드 상주 사실을 알림으로 알린다.</summary>
     private void ShowTrayNoticeOnce()
     {

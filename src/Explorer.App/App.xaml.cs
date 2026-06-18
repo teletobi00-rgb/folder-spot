@@ -139,6 +139,7 @@ public partial class App : Application
                 NetworkFolders = settings.Current.NetworkIndexFolders.IsDefaultOrEmpty
                     ? null
                     : [.. settings.Current.NetworkIndexFolders],
+                DailyScanTime = settings.Current.ScheduledIndexScanTime,
                 HelperPath = ResolveHelperPath(),
             };
         });

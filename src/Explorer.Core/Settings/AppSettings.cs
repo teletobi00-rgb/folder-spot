@@ -29,6 +29,12 @@ public sealed record AppSettings
     /// </summary>
     public ImmutableArray<string> NetworkIndexFolders { get; init; } = [];
 
+    /// <summary>
+    /// 전체 인덱싱(재스캔)을 매일 한 번 수행할 시각(로컬). 기본 12:00(점심). 그 외 시간에는 변경분만 반영해
+    /// 스캔 빈도를 줄인다. 스냅샷이 있으면 시작 시 전체 재스캔을 건너뛰고 이 예약 스캔으로 신선도를 유지한다.
+    /// </summary>
+    public TimeOnly ScheduledIndexScanTime { get; init; } = new(12, 0);
+
     /// <summary>마지막 세션의 탭/페인 구성 (최초 실행이면 null).</summary>
     public WorkspaceSession? Session { get; init; }
 

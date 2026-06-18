@@ -207,12 +207,24 @@
                                            Margin="0,0,6,0"
                                            VerticalAlignment="Center"
                                            Source="{Binding Icon}" />
+                                    <!-- 암호화/AIP 보호: 흰색(테마 전경) 자물쇠 -->
                                     <TextBlock Margin="0,0,4,0"
                                                VerticalAlignment="Center"
+                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                                                FontSize="11"
-                                               Text="🔒"
-                                               ToolTip="보호된 파일 (암호화/AIP/PDF)"
-                                               Visibility="{Binding IsProtected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               Text="&#xE72E;"
+                                               ToolTip="암호화·AIP 보호 파일"
+                                               Visibility="{Binding ProtectionKind, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Encrypted}" />
+                                    <!-- DRM(민감도 레이블) 보호: 노란 자물쇠 -->
+                                    <TextBlock Margin="0,0,4,0"
+                                               VerticalAlignment="Center"
+                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                               FontSize="11"
+                                               Foreground="#FFC107"
+                                               Text="&#xE72E;"
+                                               ToolTip="DRM 보호 문서 (민감도 레이블)"
+                                               Visibility="{Binding ProtectionKind, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Labeled}" />
                                     <TextBlock VerticalAlignment="Center"
                                                Foreground="{Binding Extension, Converter={StaticResource ExtensionColorConverter}}"
                                                Text="{Binding Name}"
@@ -260,6 +272,7 @@
                   Background="{DynamicResource ApplicationBackgroundBrush}"
                   BorderThickness="0"
                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                  AllowDrop="True"
                   ItemsSource="{Binding Items}"
                   SelectedItem="{Binding SelectedItem}"
                   SelectionMode="Extended"
@@ -270,6 +283,9 @@
                   PreviewMouseLeftButtonDown="OnPreviewMouseLeftButtonDown"
                   PreviewMouseMove="OnPreviewMouseMove"
                   PreviewMouseLeftButtonUp="OnPreviewMouseLeftButtonUp"
+                  DragOver="OnDragOver"
+                  Drop="OnDrop"
+                  DragLeave="OnDragLeave"
                   Visibility="{Binding ViewMode, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter='List,Thumbnails'}">
             <ListView.Style>
                 <Style TargetType="ListView">
@@ -316,12 +332,13 @@
                              VerticalAlignment="Center" />
         </Grid>
 
-        <!-- 빈 폴더/오류 상태 -->
+        <!-- 빈 폴더/오류 상태 — 드롭이 통과하도록 히트 테스트 비활성(빈 폴더에 끌어놓기 가능) -->
         <TextBlock x:Name="StatusText"
                    Grid.Row="1"
                    HorizontalAlignment="Center"
                    VerticalAlignment="Center"
                    FontSize="14"
+                   IsHitTestVisible="False"
                    Opacity="0.6"
                    Visibility="Collapsed" />
     </Grid>

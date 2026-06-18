@@ -23,6 +23,9 @@ public partial class FileListView : UserControl
     private ListView? _marqueeList;
     private Point _marqueeOrigin;
 
+    /// <summary>정렬 화살표(▲/▼)를 붙일 컬럼들 — 원본 헤더 텍스트와 정렬 기준을 함께 보관한다.</summary>
+    private (GridViewColumn Column, string BaseHeader, SortColumn Kind)[] _sortColumns = [];
+
     /// <summary>일괄 이름 변경 단축키용 RoutedCommand — 다이얼로그가 뷰를 필요로 해 코드비하인드에서 처리한다.</summary>
     public static readonly RoutedUICommand BatchRenameCommand = new("일괄 이름 변경", "BatchRename", typeof(FileListView));
 
@@ -40,6 +43,16 @@ public partial class FileListView : UserControl
         CommandBindings.Add(new CommandBinding(FolderSizeCommand, (_, _) => ViewModel?.CalculateFolderSizeCommand.Execute(null)));
         InputBindings.Add(new KeyBinding(BatchRenameCommand, Key.R, ModifierKeys.Control | ModifierKeys.Shift));
         InputBindings.Add(new KeyBinding(FolderSizeCommand, Key.S, ModifierKeys.Alt | ModifierKeys.Shift));
+
+        // 정렬 표시용: XAML의 원본 헤더 텍스트를 캡처해 두고, 정렬이 바뀔 때 ▲/▼만 덧붙인다.
+        _sortColumns =
+        [
+            (NameColumn, (string)NameColumn.Header, SortColumn.Name),
+            (ExtensionColumn, (string)ExtensionColumn.Header, SortColumn.Extension),
+            (SizeColumn, (string)SizeColumn.Header, SortColumn.Size),
+            (DateModifiedColumn, (string)DateModifiedColumn.Header, SortColumn.DateModified),
+            (AttributesColumn, (string)AttributesColumn.Header, SortColumn.Attributes),
+        ];
     }
 
     private FileListViewModel? ViewModel => DataContext as FileListViewModel;
@@ -58,6 +71,7 @@ public partial class FileListView : UserControl
         {
             newVm.PropertyChanged += OnViewModelPropertyChanged;
             UpdateStatusText(newVm);
+            UpdateSortIndicators();
         }
     }
 
@@ -68,6 +82,28 @@ public partial class FileListView : UserControl
             && sender is FileListViewModel vm)
         {
             UpdateStatusText(vm);
+        }
+        else if (e.PropertyName == nameof(FileListViewModel.Sort))
+        {
+            UpdateSortIndicators();
+        }
+    }
+
+    /// <summary>현재 정렬 기준 컬럼 헤더에만 ▲(오름차)/▼(내림차)를 표시한다.</summary>
+    private void UpdateSortIndicators()
+    {
+        if (ViewModel is not { } vm)
+        {
+            return;
+        }
+
+        foreach (var (column, baseHeader, kind) in _sortColumns)
+        {
+            // 내림차순=▼(U+25BC), 오름차순=▲(U+25B2).
+            var indicator = vm.Sort.Column == kind
+                ? (vm.Sort.Descending ? " ▼" : " ▲")
+                : string.Empty;
+            column.Header = baseHeader + indicator;
         }
     }
 
@@ -387,9 +423,30 @@ public partial class FileListView : UserControl
             moveModifier: (e.KeyStates & DragDropKeyStates.ShiftKey) != 0,
             sameVolume: DropRules.IsSameVolume(paths[0], targetDir));
 
+        // 소스가 허용하지 않는 효과(예: 읽기 전용·검색 결과는 복사만 허용)를 고르면 금지 커서가 된다 —
+        // 허용 효과로 보정해 커서와 실제 작업을 일치시킨다.
+        operation = ClampToAllowedEffects(operation, e.AllowedEffects);
+
         return DropRules.CanDrop(paths, targetDir, operation)
             ? (paths, targetDir, operation, targetItem)
             : null;
+    }
+
+    /// <summary>드롭 작업을 드래그 소스가 허용한 효과(<paramref name="allowed"/>)로 맞춘다.</summary>
+    private static DropOperation ClampToAllowedEffects(DropOperation operation, DragDropEffects allowed)
+    {
+        var desired = operation == DropOperation.Move ? DragDropEffects.Move : DragDropEffects.Copy;
+        if ((allowed & desired) != 0)
+        {
+            return operation;
+        }
+
+        if ((allowed & DragDropEffects.Copy) != 0)
+        {
+            return DropOperation.Copy;
+        }
+
+        return (allowed & DragDropEffects.Move) != 0 ? DropOperation.Move : DropOperation.None;
     }
 
     private void UpdateDropHighlight(ListViewItem? item)
@@ -496,16 +553,20 @@ public partial class FileListView : UserControl
     private void OnRenameBoxLoaded(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.TextBox box
-            || box.DataContext is not FileItemViewModel { IsRenaming: true } item)
+            || box.DataContext is not FileItemViewModel { IsRenaming: true })
         {
             return;
         }
 
-        box.Focus();
-
-        // 확장자를 제외한 이름 부분만 선택한다 (탐색기 동작)
-        var dotIndex = item.IsDirectory ? -1 : box.Text.LastIndexOf('.');
-        box.Select(0, dotIndex > 0 ? dotIndex : box.Text.Length);
+        // F2 진입 즉시 파일명 끝에 캐럿이 깜빡이도록(선택 없이). Visibility 바인딩으로 막 표시된
+        // 시점이라 동기 Focus가 간헐적으로 누락될 수 있어 Input 우선순위로 디스패치한다.
+        box.Dispatcher.BeginInvoke(
+            new Action(() =>
+            {
+                box.Focus();
+                box.CaretIndex = box.Text.Length;
+            }),
+            System.Windows.Threading.DispatcherPriority.Input);
     }
 
     private void OnRenameBoxKeyDown(object sender, KeyEventArgs e)

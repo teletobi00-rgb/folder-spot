@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Compression;
 using System.Text;
 using Explorer.App.Services;
 using FluentAssertions;
@@ -36,6 +37,23 @@ public sealed class FileProtectionDetectorTests : IDisposable
     private static byte[] Zip() => [0x50, 0x4B, 0x03, 0x04, 0, 0, 0, 0, 0, 0];
 
     private static byte[] Pdf(string body) => Encoding.ASCII.GetBytes("%PDF-2.0\n" + body);
+
+    /// <summary>주어진 파트 이름들을 가진 최소 OOXML(ZIP)을 만든다.</summary>
+    private static byte[] BuildOoxml(params string[] partNames)
+    {
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var name in partNames)
+            {
+                using var s = zip.CreateEntry(name).Open();
+                var bytes = Encoding.UTF8.GetBytes("<xml/>");
+                s.Write(bytes, 0, bytes.Length);
+            }
+        }
+
+        return ms.ToArray();
+    }
 
     /// <summary>최소 유효 CFBF(헤더 + 디렉터리 섹터0 + FAT 섹터1)를 만들어 주어진 디렉터리 엔트리를 넣는다.</summary>
     private static byte[] BuildCfbf(params (string Name, byte Type)[] entries)
@@ -91,73 +109,91 @@ public sealed class FileProtectionDetectorTests : IDisposable
         FileProtectionDetector.MaybeProtectable(ext).Should().Be(expected);
 
     [Fact]
-    public void Cfbf_WithEncryptedPackage_IsProtected()
+    public void Cfbf_WithEncryptedPackage_IsEncrypted()
     {
         var path = Write("secret.docx", BuildCfbf(("Root Entry", 5), ("EncryptedPackage", 2)));
-        FileProtectionDetector.IsProtected(path, "docx").Should().BeTrue();
+        FileProtectionDetector.IsProtected(path, "docx").Should().Be(ProtectionKind.Encrypted);
     }
 
     [Fact]
-    public void Cfbf_WithDataSpacesStorage_IsProtected()
+    public void Cfbf_WithDataSpacesStorage_IsEncrypted()
     {
         // DataSpaces 스토리지 이름은 제어문자 U+0006 접두 — 트리밍 후 매칭되어야 한다.
         var path = Write("aip.docx", BuildCfbf(("Root Entry", 5), (new string(new[]{(char)6,(char)68,(char)97,(char)116,(char)97,(char)83,(char)112,(char)97,(char)99,(char)101,(char)115}), 1)));
-        FileProtectionDetector.IsProtected(path, "docx").Should().BeTrue();
+        FileProtectionDetector.IsProtected(path, "docx").Should().Be(ProtectionKind.Encrypted);
     }
 
     [Fact]
-    public void Cfbf_NormalLegacyDoc_IsNotProtected()
+    public void Cfbf_NormalLegacyDoc_IsNone()
     {
         // 일반 레거시 .doc은 항상 CFBF이지만 암호화 스트림이 없다 → 보호 아님(이전 버그: bare CFBF를 보호로 오판).
         var path = Write("plain.doc", BuildCfbf(("Root Entry", 5), ("WordDocument", 2), ("1Table", 2)));
-        FileProtectionDetector.IsProtected(path, "doc").Should().BeFalse();
+        FileProtectionDetector.IsProtected(path, "doc").Should().Be(ProtectionKind.None);
     }
 
     [Fact]
-    public void Zip_Ooxml_IsNotProtected()
+    public void Zip_PlainOoxml_IsNone()
     {
-        var path = Write("plain.docx", Zip());
-        FileProtectionDetector.IsProtected(path, "docx").Should().BeFalse();
+        var path = Write("plain.docx", BuildOoxml("[Content_Types].xml", "word/document.xml"));
+        FileProtectionDetector.IsProtected(path, "docx").Should().Be(ProtectionKind.None);
     }
 
     [Fact]
-    public void Pdf_AipEncryptedPayload_IsProtected()
+    public void Zip_OoxmlWithLabelInfoPart_IsLabeled()
+    {
+        // 실제 케이스: 암호화되지 않은 OOXML이지만 MIP 민감도 레이블 파트를 가진 'DRM' 문서 → 노란 자물쇠.
+        var path = Write(
+            "labeled.xlsx",
+            BuildOoxml("[Content_Types].xml", "xl/workbook.xml", "docMetadata/LabelInfo.xml"));
+        FileProtectionDetector.IsProtected(path, "xlsx").Should().Be(ProtectionKind.Labeled);
+    }
+
+    [Fact]
+    public void Zip_TruncatedOoxml_IsNone()
+    {
+        // PK 매직만 있고 중앙 디렉터리가 깨진 가짜 ZIP → 예외를 삼키고 보호 아님.
+        var path = Write("broken.docx", Zip());
+        FileProtectionDetector.IsProtected(path, "docx").Should().Be(ProtectionKind.None);
+    }
+
+    [Fact]
+    public void Pdf_AipEncryptedPayload_IsEncrypted()
     {
         // 실제 케이스: %PDF-2.0 + /EncryptedPayload + /MicrosoftIRMService (앞부분).
         var body = "1 0 obj<</AFRelationship /EncryptedPayload/EP <</Subtype /MicrosoftIRMService>>>>\n"
             + new string('x', 100_000) + "\ntrailer<<>>\n%%EOF";
         var path = Write("irm.pdf", Pdf(body));
-        FileProtectionDetector.IsProtected(path, "pdf").Should().BeTrue();
+        FileProtectionDetector.IsProtected(path, "pdf").Should().Be(ProtectionKind.Encrypted);
     }
 
     [Fact]
-    public void Pdf_PasswordEncryptInTrailer_IsProtected()
+    public void Pdf_PasswordEncryptInTrailer_IsEncrypted()
     {
         // /Encrypt가 트레일러(끝)에만 있고 256KB head 밖 → tail 스캔으로 잡혀야 한다.
         var body = new string('x', 300_000) + "\ntrailer<</Root 1 0 R/Encrypt 2 0 R>>\n%%EOF";
         var path = Write("locked.pdf", Pdf(body));
-        FileProtectionDetector.IsProtected(path, "pdf").Should().BeTrue();
+        FileProtectionDetector.IsProtected(path, "pdf").Should().Be(ProtectionKind.Encrypted);
     }
 
     [Fact]
-    public void Pdf_WithoutProtection_IsNotProtected()
+    public void Pdf_WithoutProtection_IsNone()
     {
         var body = new string('x', 300_000) + "\ntrailer<</Root 1 0 R>>\n%%EOF";
         var path = Write("open.pdf", Pdf(body));
-        FileProtectionDetector.IsProtected(path, "pdf").Should().BeFalse();
+        FileProtectionDetector.IsProtected(path, "pdf").Should().Be(ProtectionKind.None);
     }
 
     [Fact]
-    public void NonPdfBytes_WithPdfExtension_IsNotProtected()
+    public void NonPdfBytes_WithPdfExtension_IsNone()
     {
         var path = Write("fake.pdf", Encoding.ASCII.GetBytes("not a pdf but mentions /Encrypt here"));
-        FileProtectionDetector.IsProtected(path, "pdf").Should().BeFalse();
+        FileProtectionDetector.IsProtected(path, "pdf").Should().Be(ProtectionKind.None);
     }
 
     [Fact]
-    public void NonProtectableExtension_IsNotProtected()
+    public void NonProtectableExtension_IsNone()
     {
         var path = Write("note.txt", Encoding.ASCII.GetBytes("hello"));
-        FileProtectionDetector.IsProtected(path, "txt").Should().BeFalse();
+        FileProtectionDetector.IsProtected(path, "txt").Should().Be(ProtectionKind.None);
     }
 }

@@ -121,6 +121,15 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
 
     public NavigationHistory History { get; private set; } = NavigationHistory.Empty;
 
+    /// <summary>탭 전환 시 해당 탭의 히스토리를 복원한다. 이후 같은 경로로의 NavigateTo는
+    /// Visit가 no-op이라 히스토리를 그대로 유지한다(탭별 뒤로/앞으로 격리).</summary>
+    public void RestoreHistory(NavigationHistory history)
+    {
+        ArgumentNullException.ThrowIfNull(history);
+        History = history;
+        NotifyNavigationCommands();
+    }
+
     /// <summary>외부(검색 reveal 등)에서 경로로 항목을 선택한다. 목록에 없으면 무시.</summary>
     public void SelectByPath(string fullPath)
     {

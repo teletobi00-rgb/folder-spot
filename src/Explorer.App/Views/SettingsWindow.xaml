@@ -94,7 +94,31 @@
                     </ItemsControl>
                 </StackPanel>
 
-                <CheckBox Margin="0,4,0,0"
+                <!-- 인덱싱 검사 시간: 매일 이 시각에 한 번 전체 재스캔 -->
+                <Grid Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="120" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock VerticalAlignment="Center" Text="인덱싱 검사 시간" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                        <ComboBox MinWidth="60"
+                                  ItemsSource="{Binding ScanHours}"
+                                  SelectedItem="{Binding ScanHour}" />
+                        <TextBlock Margin="6,0" VerticalAlignment="Center" Text="시" />
+                        <ComboBox MinWidth="60"
+                                  ItemsSource="{Binding ScanMinutes}"
+                                  SelectedItem="{Binding ScanMinute}" />
+                        <TextBlock Margin="6,0,0,0" VerticalAlignment="Center" Text="분" />
+                    </StackPanel>
+                </Grid>
+                <TextBlock Margin="120,2,0,0"
+                           FontSize="11"
+                           Opacity="0.6"
+                           TextWrapping="Wrap"
+                           Text="매일 이 시각에 한 번 전체 인덱싱을 새로 합니다(기본 점심 12:00). 그 외 시간에는 변경분만 반영해 스캔을 줄입니다. 빠른 인덱싱(NTFS) 사용 시에는 시작할 때도 한 번 스캔합니다." />
+
+                <CheckBox Margin="0,8,0,0"
                           Content="Windows 시작 시 자동 실행 (부팅 후 인덱싱 시작)"
                           IsChecked="{Binding AutoStartOnBoot}" />
                 <CheckBox Margin="0,4,0,0"

@@ -1,16 +1,18 @@
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using Explorer.Core.Caching;
 
 namespace Explorer.App.Services;
 
 /// <summary>
-/// 보호(암호화/AIP·IRM·권한 제한) 파일 감지. <b>실제로 암호화/IRM 보호된 파일만</b> 표시한다(라벨만 붙은 건 제외).
+/// 파일 보호 감지 — 자물쇠 종류(<see cref="ProtectionKind"/>)를 돌려준다.
 /// <list type="bullet">
-/// <item>Office(OOXML·레거시 doc/xls/ppt): 암호화/AIP면 CFBF(OLE 복합 문서) 안에 EncryptedPackage·DataSpaces·
-/// EncryptionInfo 스트림이 생긴다. 일반 OOXML은 ZIP, 일반 레거시는 그 스트림이 없으므로 구분된다.</item>
-/// <item>PDF: AIP/IRM은 <c>/EncryptedPayload</c>·<c>/MicrosoftIRMService</c>(PDF 2.0 보호 래퍼), 표준 암호는
-/// 트레일러 <c>/Encrypt</c>로 표시된다.</item>
+/// <item><b>암호화/AIP·IRM(흰색)</b>: Office(OOXML·레거시 doc/xls/ppt)는 암호화/AIP면 CFBF(OLE 복합 문서) 안에
+/// EncryptedPackage·DataSpaces·EncryptionInfo 스트림이 생긴다. PDF는 <c>/EncryptedPayload</c>·
+/// <c>/MicrosoftIRMService</c>(PDF 2.0 보호 래퍼) 또는 트레일러 <c>/Encrypt</c>(표준 암호)로 표시된다.</item>
+/// <item><b>민감도 레이블/DRM(노랑)</b>: 암호화되지 않은 OOXML(ZIP)이라도 MIP 민감도 레이블 파트
+/// <c>docMetadata/LabelInfo.xml</c>를 가지면 분류/DRM 문서로 본다(레이블이 비어 있어도 — 분류 체계를 거친 문서).</item>
 /// </list>
 /// 결과는 경로+수정시각으로 캐시하고 동시 검사를 제한해 보호 파일이 많은 폴더에서도 IO가 폭주하지 않는다.
 /// </summary>
@@ -33,7 +35,7 @@ public static class FileProtectionDetector
     private static ReadOnlySpan<byte> PdfSignature => "%PDF-"u8;
 
     // 보호 검사 결과 캐시(경로+수정시각 키) — 폴더 재진입·재생성 시 같은 파일을 다시 열지 않는다.
-    private static readonly LruCache<string, bool> Cache = new(capacity: 4096);
+    private static readonly LruCache<string, ProtectionKind> Cache = new(capacity: 4096);
 
     // 동시 파일 오픈 제한 — 보호 파일이 많은 폴더에서 스레드풀/디스크 IO 폭주 방지(비동기 대기라 풀 스레드를 막지 않음).
     private static readonly SemaphoreSlim Gate = new(4, 4);
@@ -43,14 +45,14 @@ public static class FileProtectionDetector
         !string.IsNullOrEmpty(extensionWithoutDot) && ProtectableExtensions.Contains(extensionWithoutDot);
 
     /// <summary>
-    /// 보호 여부를 캐시 + 동시성 제한을 거쳐 검사한다. UI 경로용 — 세마포어 대기는 비동기라 스레드를 막지 않고,
+    /// 보호 종류를 캐시 + 동시성 제한을 거쳐 검사한다. UI 경로용 — 세마포어 대기는 비동기라 스레드를 막지 않고,
     /// 실제 파일 오픈은 스레드풀에서 수행한다.
     /// </summary>
-    public static async Task<bool> IsProtectedAsync(string path, string extensionWithoutDot, long modifiedTicks)
+    public static async Task<ProtectionKind> IsProtectedAsync(string path, string extensionWithoutDot, long modifiedTicks)
     {
         if (!MaybeProtectable(extensionWithoutDot))
         {
-            return false;
+            return ProtectionKind.None;
         }
 
         var key = path + "|" + modifiedTicks.ToString(CultureInfo.InvariantCulture);
@@ -78,11 +80,11 @@ public static class FileProtectionDetector
     }
 
     /// <summary>캐시·동시성 제한 없이 즉시 검사한다(주로 테스트용). UI 경로는 <see cref="IsProtectedAsync"/>를 쓴다.</summary>
-    public static bool IsProtected(string path, string extensionWithoutDot) =>
-        MaybeProtectable(extensionWithoutDot) && Detect(path);
+    public static ProtectionKind IsProtected(string path, string extensionWithoutDot) =>
+        MaybeProtectable(extensionWithoutDot) ? Detect(path) : ProtectionKind.None;
 
     /// <summary>매직 바이트로 형식을 판별해 분기한다 — 확장자가 아니라 실제 내용으로 판단(예: AIP가 .pdf를 CFBF로 감싸도 잡힘).</summary>
-    private static bool Detect(string path)
+    private static ProtectionKind Detect(string path)
     {
         try
         {
@@ -91,19 +93,51 @@ public static class FileProtectionDetector
             var read = stream.ReadAtLeast(magic, 8, throwOnEndOfStream: false);
             if (read >= 8 && magic.SequenceEqual(CfbfSignature))
             {
-                return CompoundFileProbe.HasEncryptionStream(stream);
+                return CompoundFileProbe.HasEncryptionStream(stream) ? ProtectionKind.Encrypted : ProtectionKind.None;
             }
 
             if (read >= PdfSignature.Length && magic[..PdfSignature.Length].SequenceEqual(PdfSignature))
             {
-                return PdfHasProtection(stream);
+                return PdfHasProtection(stream) ? ProtectionKind.Encrypted : ProtectionKind.None;
             }
 
-            return false; // 일반 OOXML(ZIP) 등 — 보호 아님
+            if (read >= 4 && magic[0] == 0x50 && magic[1] == 0x4B)
+            {
+                // OOXML(ZIP) — 암호화는 위 CFBF에서 잡히고, 여기선 MIP 민감도 레이블(비암호화 'DRM') 파트를 본다.
+                return DetectOoxmlLabel(stream);
+            }
+
+            return ProtectionKind.None;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return false;
+            return ProtectionKind.None;
+        }
+    }
+
+    /// <summary>
+    /// OOXML(ZIP) 중앙 디렉터리만 읽어 MIP 민감도 레이블 파트(<c>docMetadata/LabelInfo.xml</c>) 존재를 확인한다.
+    /// 압축 해제 없이 엔트리 이름만 보므로 가볍다. 레이블이 비어 있어도(declassified) 분류 체계를 거친 문서로 본다.
+    /// </summary>
+    private static ProtectionKind DetectOoxmlLabel(Stream stream)
+    {
+        try
+        {
+            stream.Seek(0, SeekOrigin.Begin);
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+            foreach (var entry in archive.Entries)
+            {
+                if (string.Equals(entry.FullName, "docMetadata/LabelInfo.xml", StringComparison.OrdinalIgnoreCase))
+                {
+                    return ProtectionKind.Labeled;
+                }
+            }
+
+            return ProtectionKind.None;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or NotSupportedException)
+        {
+            return ProtectionKind.None;
         }
     }
 

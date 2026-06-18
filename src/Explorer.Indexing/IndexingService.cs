@@ -177,6 +177,12 @@ public sealed record IndexingOptions
     /// <summary>네트워크 인덱싱 대상 폴더(비우면 네트워크 드라이브 루트 전체). 지정되면 상한 없이 인덱싱한다.</summary>
     public IReadOnlyList<string>? NetworkFolders { get; init; }
 
+    /// <summary>
+    /// 매일 전체 재스캔을 수행할 시각(로컬). null이면 예약 스캔 없음(기존 동작). 설정되면 그 시각에 하루 한 번
+    /// 전체 재스캔하고, 스냅샷이 있으면 시작 시 전체 재스캔을 건너뛴다(USN 고속 경로는 시작 재스캔 유지).
+    /// </summary>
+    public TimeOnly? DailyScanTime { get; init; }
+
     /// <summary>권한 헬퍼 실행 파일 경로 (없으면 USN 비활성).</summary>
     public string? HelperPath { get; init; }
 
@@ -408,10 +414,31 @@ public sealed class IndexingService : IHostedService, IDisposable
             Status = $"감시 중 ({_catalog.LastKnownCount:N0}개 항목)";
             _logger.LogInformation("인덱싱 파이프라인 가동: {Status}", Status);
 
-            // 재스캔 요청(FSW 오버플로) 처리 루프
+            // 예약 스캔 다음 시각(설정 시) — 아직 지나지 않은 가장 가까운 시각.
+            var nextScheduledScan = _options.DailyScanTime is { } scanTime
+                ? NextOccurrence(scanTime, DateTime.Now)
+                : (DateTime?)null;
+
+            // 재스캔 요청(FSW 오버플로) + 예약 스캔 처리 루프
             while (!ct.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+
+                // 예약 시각(기본 12:00)이 되면 하루 한 번 전체 재스캔을 요청한다(기존 재스캔 경로 재사용).
+                if (nextScheduledScan is { } due && DateTime.Now >= due)
+                {
+                    nextScheduledScan = NextOccurrence(_options.DailyScanTime!.Value, DateTime.Now);
+                    lock (_rescanGate)
+                    {
+                        foreach (var root in roots)
+                        {
+                            _pendingRescans.Add(root);
+                        }
+                    }
+
+                    _logger.LogInformation("예약 인덱싱 스캔 시작 — 다음 예정: {Next:yyyy-MM-dd HH:mm}", nextScheduledScan);
+                }
+
                 await ProcessPendingRescansAsync(ct).ConfigureAwait(false);
                 _catalog.RefreshLastKnownCount(); // 증분 변경(FSW/USN)을 반영해 표시용 카운트를 주기 갱신
             }
@@ -476,6 +503,13 @@ public sealed class IndexingService : IHostedService, IDisposable
             return false;
         }
 
+        // 일일 예약 스캔이 설정돼 있으면 시작 시 전체 재스캔을 건너뛴다(시작마다 스캔하지 않게).
+        // 신선도는 예약 시각의 전체 재스캔 + FSW 증분이 담당한다. (스냅샷 존재·비 USN은 위에서 확인됨.)
+        if (_options.DailyScanTime is not null)
+        {
+            return true;
+        }
+
         // 옵션이 꺼져 있으면 스킵하지 않는다.
         if (_options.StartupRescanSkipMaxAge is not { } maxAge)
         {
@@ -490,6 +524,13 @@ public sealed class IndexingService : IHostedService, IDisposable
 
         var age = DateTime.UtcNow - savedUtc;
         return age >= TimeSpan.Zero && age <= maxAge;
+    }
+
+    /// <summary>주어진 시각(로컬)의 다음 발생 시점 — 오늘 그 시각이 아직이면 오늘, 지났으면 내일.</summary>
+    private static DateTime NextOccurrence(TimeOnly timeOfDay, DateTime now)
+    {
+        var todayAt = now.Date + timeOfDay.ToTimeSpan();
+        return now < todayAt ? todayAt : todayAt.AddDays(1);
     }
 
     /// <summary>

@@ -23,7 +23,7 @@ public sealed partial class FileItemViewModel : ObservableObject
     private ImageSource? _thumbnail;
     private bool _thumbnailRequested;
     private const int ThumbnailLoadSize = 256;
-    private bool _isProtected;
+    private Explorer.App.Services.ProtectionKind _protectionKind;
     private bool _protectionChecked;
 
     /// <summary>잘라내기 표시 상태 (시각적 흐림 처리용).</summary>
@@ -117,8 +117,11 @@ public sealed partial class FileItemViewModel : ObservableObject
         }
     }
 
-    /// <summary>AIP/암호화로 보호된 Office 파일이면 true(첫 접근 시 지연 검사 — OOXML만 파일을 연다).</summary>
-    public bool IsProtected
+    /// <summary>
+    /// 보호 종류(없음/암호화·AIP/민감도 레이블). 첫 접근 시 지연 검사 — Office/PDF만 파일을 연다.
+    /// 자물쇠 색은 이 값으로 결정한다(암호화=흰색, 레이블=노랑).
+    /// </summary>
+    public Explorer.App.Services.ProtectionKind ProtectionKind
     {
         get
         {
@@ -131,9 +134,12 @@ public sealed partial class FileItemViewModel : ObservableObject
                 }
             }
 
-            return _isProtected;
+            return _protectionKind;
         }
     }
+
+    /// <summary>보호(암호화/AIP 또는 민감도 레이블)된 파일이면 true.</summary>
+    public bool IsProtected => ProtectionKind != Explorer.App.Services.ProtectionKind.None;
 
     private async Task CheckProtectionAsync()
     {
@@ -142,9 +148,10 @@ public sealed partial class FileItemViewModel : ObservableObject
         var result = await Explorer.App.Services.FileProtectionDetector
             .IsProtectedAsync(Entry.FullPath, Entry.Extension, Entry.DateModified.Ticks)
             .ConfigureAwait(true);
-        if (result)
+        if (result != Explorer.App.Services.ProtectionKind.None)
         {
-            _isProtected = true;
+            _protectionKind = result;
+            OnPropertyChanged(nameof(ProtectionKind));
             OnPropertyChanged(nameof(IsProtected));
         }
     }

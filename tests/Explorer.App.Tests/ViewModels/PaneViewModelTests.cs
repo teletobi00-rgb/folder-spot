@@ -81,6 +81,40 @@ public sealed class PaneViewModelTests
     }
 
     [Fact]
+    public async Task SwitchTab_IsolatesBackHistoryPerTab()
+    {
+        var pane = CreatePane(@"C:\a");
+        await pane.ActivateCurrentTabAsync();
+
+        // 첫 탭에서 a → b → c 이동 (뒤로가기 가능 상태)
+        await pane.FileList.NavigateToAsync(@"C:\b");
+        await pane.FileList.NavigateToAsync(@"C:\c");
+        pane.FileList.History.CanGoBack.Should().BeTrue();
+
+        // 새 탭(현재 경로 c 복제) — 자체 히스토리는 비어 있어 뒤로가기 불가여야 한다.
+        await pane.AddTabCommand.ExecuteAsync(null);
+        pane.FileList.CurrentPath.Should().Be(@"C:\c");
+        pane.FileList.History.CanGoBack.Should().BeFalse("새 탭은 다른 탭의 이동 내역을 물려받지 않아야 한다");
+
+        // 새 탭에서 c → d 이동.
+        await pane.FileList.NavigateToAsync(@"C:\d");
+
+        // 첫 탭으로 전환 — 첫 탭 히스토리(a,b,c)가 복원되어 뒤로가면 b여야 한다.
+        pane.ActiveTab = pane.Tabs[0];
+        await FileListTestContext.WaitUntilAsync(() => pane.FileList.CurrentPath == @"C:\c");
+        pane.FileList.History.CanGoBack.Should().BeTrue();
+        await pane.FileList.GoBackCommand.ExecuteAsync(null);
+        pane.FileList.CurrentPath.Should().Be(@"C:\b", "첫 탭의 뒤로가기는 첫 탭 내역만 따라야 한다");
+
+        // 둘째 탭으로 전환 — 둘째 탭 히스토리(c,d)가 복원되어 뒤로가면 c여야 한다.
+        pane.ActiveTab = pane.Tabs[1];
+        await FileListTestContext.WaitUntilAsync(() => pane.FileList.CurrentPath == @"C:\d");
+        pane.FileList.History.CanGoBack.Should().BeTrue();
+        await pane.FileList.GoBackCommand.ExecuteAsync(null);
+        pane.FileList.CurrentPath.Should().Be(@"C:\c", "둘째 탭의 뒤로가기는 둘째 탭 내역만 따라야 한다");
+    }
+
+    [Fact]
     public async Task CloseActiveTab_ActivatesNeighborAndNavigates()
     {
         var pane = CreatePane(@"C:\a");

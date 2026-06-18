@@ -33,6 +33,17 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _showResourceMonitor;
 
+    [ObservableProperty]
+    private int _scanHour = 12;
+
+    [ObservableProperty]
+    private int _scanMinute;
+
+    /// <summary>인덱싱 검사 시각 선택용 — 시(0~23)와 분(5분 단위).</summary>
+    public IReadOnlyList<int> ScanHours { get; } = [.. Enumerable.Range(0, 24)];
+
+    public IReadOnlyList<int> ScanMinutes { get; } = [.. Enumerable.Range(0, 12).Select(i => i * 5)];
+
     /// <summary>저장이 실제로 적용됐는지(닫은 뒤 목록 새로고침 판단용).</summary>
     public bool Saved { get; private set; }
 
@@ -66,6 +77,8 @@ public sealed partial class SettingsViewModel : ObservableObject
         AutoStartOnBoot = _autoStart.IsEnabled;
         ShowProgramLauncher = current.ShowProgramLauncher;
         ShowResourceMonitor = current.ShowResourceMonitor;
+        ScanHour = current.ScheduledIndexScanTime.Hour;
+        ScanMinute = current.ScheduledIndexScanTime.Minute;
         FillRows(current.ExtensionColors);
     }
 
@@ -158,6 +171,7 @@ public sealed partial class SettingsViewModel : ObservableObject
             NetworkIndexFolders = netFolders,
             ShowProgramLauncher = ShowProgramLauncher,
             ShowResourceMonitor = ShowResourceMonitor,
+            ScheduledIndexScanTime = new TimeOnly(ScanHour, ScanMinute),
             ExtensionColors = colors,
         });
         _theme.Apply(SelectedTheme);

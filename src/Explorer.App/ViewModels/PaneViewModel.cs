@@ -213,6 +213,7 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
         try
         {
             FileList.Sort = tab.Sort;
+            FileList.RestoreHistory(tab.History);
             await FileList.NavigateToAsync(tab.Path);
         }
         finally
@@ -234,7 +235,8 @@ public sealed partial class PaneViewModel : ObservableObject, IDisposable
 
         if (e.PropertyName == nameof(FileListViewModel.CurrentPath) && FileList.CurrentPath is { } path)
         {
-            _state = _state.UpdateActiveTab(t => t with { Path = path });
+            // 경로 변경 = 탐색 발생 → 활성 탭에 경로와 함께 히스토리도 저장(탭별 뒤로/앞으로 격리).
+            _state = _state.UpdateActiveTab(t => t with { Path = path, History = FileList.History });
             ActiveTab?.UpdatePath(path);
         }
         else if (e.PropertyName == nameof(FileListViewModel.Sort))

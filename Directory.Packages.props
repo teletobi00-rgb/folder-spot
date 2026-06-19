@@ -25,6 +25,9 @@
   <ItemGroup Label="Indexing">
     <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.9" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.9" />
+    <!-- 네이티브 SQLite 바이너리를 3.50.3으로 올려 GHSA-2m69-gcr7-jv3q(2.1.11 이하 SQLite 취약점) 해소.
+         관리형 core/provider(2.1.11)는 그대로 두고 네이티브(C ABI)만 교체 — Microsoft.Data.Sqlite와 호환. -->
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
   </ItemGroup>
 
   <ItemGroup Label="Preview">

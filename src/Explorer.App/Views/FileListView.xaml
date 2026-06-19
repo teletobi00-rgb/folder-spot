@@ -216,15 +216,15 @@
                                                Text="&#xE72E;"
                                                ToolTip="암호화·AIP 보호 파일"
                                                Visibility="{Binding ProtectionKind, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Encrypted}" />
-                                    <!-- DRM(민감도 레이블) 보호: 노란 자물쇠 -->
+                                    <!-- 사내 DRM(SoftCamp) 보호: 노란 자물쇠 -->
                                     <TextBlock Margin="0,0,4,0"
                                                VerticalAlignment="Center"
                                                FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                                                FontSize="11"
                                                Foreground="#FFC107"
                                                Text="&#xE72E;"
-                                               ToolTip="DRM 보호 문서 (민감도 레이블)"
-                                               Visibility="{Binding ProtectionKind, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Labeled}" />
+                                               ToolTip="사내 DRM 보호 문서"
+                                               Visibility="{Binding ProtectionKind, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Drm}" />
                                     <TextBlock VerticalAlignment="Center"
                                                Foreground="{Binding Extension, Converter={StaticResource ExtensionColorConverter}}"
                                                Text="{Binding Name}"

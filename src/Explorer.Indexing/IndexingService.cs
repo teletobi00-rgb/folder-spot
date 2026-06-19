@@ -372,26 +372,37 @@ public sealed class IndexingService : IHostedService, IDisposable
                     "스냅샷이 최신 — 로컬 전체 재스캔 생략, FSW 증분 감시만 시작 ({Count:N0}개 항목)",
                     _catalog.LastKnownCount);
 
-                // 로컬은 스냅샷으로 이미 최신 → "생략"으로 표시. 네트워크는 아래에서 갱신한다.
+                // 로컬은 스냅샷으로 이미 최신 → "생략"으로 표시.
                 foreach (var localRoot in roots.Where(r => DriveKindOf(r) != DriveKind.Network))
                 {
                     UpdateDrive(localRoot, DriveIndexPhase.Skipped);
                 }
 
-                // 로컬은 스냅샷으로 충분하지만, 네트워크 드라이브는 FSW 통지가 불안정하고 스냅샷 신선도 보장 밖이다.
-                // 스킵해 버리면 FSW가 기존 파일을 열거하지 않아 네트워크가 영영 인덱싱되지 않으므로(핵심 버그),
-                // 상한(노드 수·시간)을 두고 시작 시마다 살아있는 인덱스에 갱신한다.
                 var networkRoots = roots.Where(r => DriveKindOf(r) == DriveKind.Network).ToList();
                 if (networkRoots.Count > 0)
                 {
-                    using var lease = _catalog.Acquire();
-                    var networkChanged = await ScanNetworkRootsAsync(
-                        networkRoots, lease.Index, _options.NetworkFolders is { Count: > 0 }, ct).ConfigureAwait(false);
-                    _catalog.RefreshLastKnownCount();
-                    if (networkChanged)
+                    if (_options.DailyScanTime is not null)
                     {
-                        _dirty = true;
-                        SaveSnapshotIfDirty();
+                        // 예약 스캔이 설정돼 있으면 네트워크도 시작 시 스캔하지 않고 예약 시각의 전체 재스캔으로 미룬다
+                        // (아침에 켜자마자 스캔하지 않도록). 스냅샷의 기존 네트워크 항목으로 검색은 계속 동작한다.
+                        foreach (var networkRoot in networkRoots)
+                        {
+                            UpdateDrive(networkRoot, DriveIndexPhase.Skipped);
+                        }
+                    }
+                    else
+                    {
+                        // 예약 스캔이 없으면(기존 동작): 네트워크는 FSW 통지가 불안정하고 스냅샷 신선도 보장 밖이며,
+                        // 스킵하면 FSW가 기존 파일을 열거하지 않아 영영 인덱싱되지 않으므로(핵심 버그) 시작 시마다 갱신한다.
+                        using var lease = _catalog.Acquire();
+                        var networkChanged = await ScanNetworkRootsAsync(
+                            networkRoots, lease.Index, _options.NetworkFolders is { Count: > 0 }, ct).ConfigureAwait(false);
+                        _catalog.RefreshLastKnownCount();
+                        if (networkChanged)
+                        {
+                            _dirty = true;
+                            SaveSnapshotIfDirty();
+                        }
                     }
                 }
 

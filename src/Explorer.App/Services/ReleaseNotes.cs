@@ -8,6 +8,11 @@ public static class ReleaseNotes
 {
     private static readonly Dictionary<string, IReadOnlyList<string>> Notes = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["v1.3.1"] =
+        [
+            "사내 DRM(SoftCamp)으로 보호된 문서를 노란 자물쇠로 정확히 표시합니다. AIP 민감도 '일반' 레이블만 붙은 문서에는 자물쇠를 표시하지 않습니다.",
+            "예약 인덱싱 시간을 설정해 두면, 아침에 켤 때 네트워크 드라이브를 바로 스캔하지 않고 설정한 시각에만 전체 검사합니다.",
+        ],
         ["v1.3.0"] =
         [
             "탭마다 뒤로/앞으로 기록이 따로 유지됩니다 — 다른 탭의 이동이 섞이지 않습니다.",

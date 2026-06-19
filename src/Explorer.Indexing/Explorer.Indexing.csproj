@@ -7,6 +7,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <!-- 취약점(GHSA-2m69-gcr7-jv3q) 해소용 네이티브 SQLite 상향 — Microsoft.Data.Sqlite의 전이 2.1.11을 덮어쓴다. -->
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" />
   </ItemGroup>
 
   <ItemGroup>

@@ -139,13 +139,33 @@ public sealed class FileProtectionDetectorTests : IDisposable
     }
 
     [Fact]
-    public void Zip_OoxmlWithLabelInfoPart_IsLabeled()
+    public void Zip_OoxmlWithLabelInfoPart_IsNone()
     {
-        // 실제 케이스: 암호화되지 않은 OOXML이지만 MIP 민감도 레이블 파트를 가진 'DRM' 문서 → 노란 자물쇠.
+        // AIP 민감도 레이블(일반 등)만 붙은 OOXML은 정상적으로 열린다 → 보호 아님(v1.3.0 오탐 교정).
         var path = Write(
             "labeled.xlsx",
             BuildOoxml("[Content_Types].xml", "xl/workbook.xml", "docMetadata/LabelInfo.xml"));
-        FileProtectionDetector.IsProtected(path, "xlsx").Should().Be(ProtectionKind.Labeled);
+        FileProtectionDetector.IsProtected(path, "xlsx").Should().Be(ProtectionKind.None);
+    }
+
+    [Fact]
+    public void SoftCampDrm_IsDrm()
+    {
+        // 사내 DRM(SoftCamp): 확장자는 유지하되 내용 전체가 "SCDS…" 컨테이너로 암호화된다.
+        var bytes = new byte[72];
+        Encoding.ASCII.GetBytes("SCDSA004").CopyTo(bytes, 0);
+        var path = Write("protected.pptx", bytes);
+        FileProtectionDetector.IsProtected(path, "pptx").Should().Be(ProtectionKind.Drm);
+    }
+
+    [Fact]
+    public void SoftCampDrm_KeepsHwpExtension_IsDrm()
+    {
+        // DRM 컨테이너는 한글(.hwp) 등 다른 문서 형식도 같은 매직으로 감싼다.
+        var bytes = new byte[72];
+        Encoding.ASCII.GetBytes("SCDSA004").CopyTo(bytes, 0);
+        var path = Write("protected.hwp", bytes);
+        FileProtectionDetector.IsProtected(path, "hwp").Should().Be(ProtectionKind.Drm);
     }
 
     [Fact]

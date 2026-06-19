@@ -1,18 +1,18 @@
 using System.Globalization;
 using System.IO;
-using System.IO.Compression;
 using Explorer.Core.Caching;
 
 namespace Explorer.App.Services;
 
 /// <summary>
-/// 파일 보호 감지 — 자물쇠 종류(<see cref="ProtectionKind"/>)를 돌려준다.
+/// 파일 보호 감지 — 자물쇠 종류(<see cref="ProtectionKind"/>)를 돌려준다. <b>실제로 보호된 파일만</b> 표시한다
+/// (AIP 민감도 레이블만 붙고 정상적으로 열리는 일반 문서는 제외).
 /// <list type="bullet">
 /// <item><b>암호화/AIP·IRM(흰색)</b>: Office(OOXML·레거시 doc/xls/ppt)는 암호화/AIP면 CFBF(OLE 복합 문서) 안에
 /// EncryptedPackage·DataSpaces·EncryptionInfo 스트림이 생긴다. PDF는 <c>/EncryptedPayload</c>·
 /// <c>/MicrosoftIRMService</c>(PDF 2.0 보호 래퍼) 또는 트레일러 <c>/Encrypt</c>(표준 암호)로 표시된다.</item>
-/// <item><b>민감도 레이블/DRM(노랑)</b>: 암호화되지 않은 OOXML(ZIP)이라도 MIP 민감도 레이블 파트
-/// <c>docMetadata/LabelInfo.xml</c>를 가지면 분류/DRM 문서로 본다(레이블이 비어 있어도 — 분류 체계를 거친 문서).</item>
+/// <item><b>사내 DRM(노랑)</b>: SoftCamp Document Security DRM은 파일 전체를 벤더 컨테이너로 암호화하며
+/// 매직 헤더 <c>"SCDS"</c>로 식별한다(원래 확장자는 유지).</item>
 /// </list>
 /// 결과는 경로+수정시각으로 캐시하고 동시 검사를 제한해 보호 파일이 많은 폴더에서도 IO가 폭주하지 않는다.
 /// </summary>
@@ -26,6 +26,8 @@ public static class FileProtectionDetector
         "pptx", "pptm", "ppsx", "ppsm", "potx", "potm",
         // 레거시 Office (항상 CFBF — 내부 EncryptedPackage/DataSpaces 유무로 판별)
         "doc", "dot", "xls", "xlt", "xla", "ppt", "pot", "pps", "ppa",
+        // 한글(HWP/HWPX) — DRM 컨테이너는 확장자를 유지하므로 함께 검사
+        "hwp", "hwpx",
         // PDF
         "pdf",
     };
@@ -33,6 +35,9 @@ public static class FileProtectionDetector
     private static ReadOnlySpan<byte> CfbfSignature => [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
 
     private static ReadOnlySpan<byte> PdfSignature => "%PDF-"u8;
+
+    /// <summary>SoftCamp Document Security DRM 컨테이너 매직(버전 무관 접두 "SCDS").</summary>
+    private static ReadOnlySpan<byte> SoftCampSignature => "SCDS"u8;
 
     // 보호 검사 결과 캐시(경로+수정시각 키) — 폴더 재진입·재생성 시 같은 파일을 다시 열지 않는다.
     private static readonly LruCache<string, ProtectionKind> Cache = new(capacity: 4096);
@@ -96,46 +101,21 @@ public static class FileProtectionDetector
                 return CompoundFileProbe.HasEncryptionStream(stream) ? ProtectionKind.Encrypted : ProtectionKind.None;
             }
 
+            // 사내 DRM(SoftCamp): 원래 확장자를 유지하지만 내용 전체가 "SCDS…" 컨테이너로 암호화된다.
+            if (read >= SoftCampSignature.Length && magic[..SoftCampSignature.Length].SequenceEqual(SoftCampSignature))
+            {
+                return ProtectionKind.Drm;
+            }
+
             if (read >= PdfSignature.Length && magic[..PdfSignature.Length].SequenceEqual(PdfSignature))
             {
                 return PdfHasProtection(stream) ? ProtectionKind.Encrypted : ProtectionKind.None;
             }
 
-            if (read >= 4 && magic[0] == 0x50 && magic[1] == 0x4B)
-            {
-                // OOXML(ZIP) — 암호화는 위 CFBF에서 잡히고, 여기선 MIP 민감도 레이블(비암호화 'DRM') 파트를 본다.
-                return DetectOoxmlLabel(stream);
-            }
-
+            // 일반 OOXML(ZIP)·AIP 민감도 레이블만 붙은 문서 등 — 정상적으로 열리므로 보호 아님.
             return ProtectionKind.None;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return ProtectionKind.None;
-        }
-    }
-
-    /// <summary>
-    /// OOXML(ZIP) 중앙 디렉터리만 읽어 MIP 민감도 레이블 파트(<c>docMetadata/LabelInfo.xml</c>) 존재를 확인한다.
-    /// 압축 해제 없이 엔트리 이름만 보므로 가볍다. 레이블이 비어 있어도(declassified) 분류 체계를 거친 문서로 본다.
-    /// </summary>
-    private static ProtectionKind DetectOoxmlLabel(Stream stream)
-    {
-        try
-        {
-            stream.Seek(0, SeekOrigin.Begin);
-            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-            foreach (var entry in archive.Entries)
-            {
-                if (string.Equals(entry.FullName, "docMetadata/LabelInfo.xml", StringComparison.OrdinalIgnoreCase))
-                {
-                    return ProtectionKind.Labeled;
-                }
-            }
-
-            return ProtectionKind.None;
-        }
-        catch (Exception ex) when (ex is InvalidDataException or IOException or NotSupportedException)
         {
             return ProtectionKind.None;
         }

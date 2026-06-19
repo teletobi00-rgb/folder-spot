@@ -12,8 +12,9 @@ public enum ProtectionKind
     Encrypted,
 
     /// <summary>
-    /// MIP 민감도 레이블이 적용된(또는 분류 체계를 거친) 비암호화 OOXML 문서 — 노란 자물쇠.
-    /// 사내에서 흔히 'DRM 문서'라 부르는 타입. 파일 자체는 열리지만 docMetadata/LabelInfo.xml 레이블 파트를 가진다.
+    /// 사내 DRM(SoftCamp Document Security)으로 보호·암호화된 파일 — 노란 자물쇠.
+    /// 파일 전체가 벤더 컨테이너로 암호화되며 매직 헤더 "SCDS"로 식별한다.
+    /// (AIP 민감도 레이블만 붙은 일반 문서는 보호로 보지 않는다 — 정상적으로 열리므로 None.)
     /// </summary>
-    Labeled,
+    Drm,
 }

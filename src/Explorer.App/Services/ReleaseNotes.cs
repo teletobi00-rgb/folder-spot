@@ -8,6 +8,10 @@ public static class ReleaseNotes
 {
     private static readonly Dictionary<string, IReadOnlyList<string>> Notes = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["v1.3.2"] =
+        [
+            "인덱싱이 수시로 도는 문제를 해결했습니다 — 파일 변경이 한꺼번에 몰려도(특히 C: 시스템 드라이브) 즉시 전체 재스캔하지 않고, 예약 시각(기본 12:00)의 검사로 모읍니다. 개별 변경은 그대로 실시간 반영되고, 네트워크 드라이브도 더 이상 반복 스캔하지 않습니다.",
+        ],
         ["v1.3.1"] =
         [
             "사내 DRM(SoftCamp)으로 보호된 문서를 노란 자물쇠로 정확히 표시합니다. AIP 민감도 '일반' 레이블만 붙은 문서에는 자물쇠를 표시하지 않습니다.",

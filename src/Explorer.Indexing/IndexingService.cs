@@ -862,13 +862,7 @@ public sealed class IndexingService : IHostedService, IDisposable
             lease = _catalog.Acquire();
             var watcher = new FswIndexSource(
                 lease.Index,
-                rescanRoot =>
-                {
-                    lock (_rescanGate)
-                    {
-                        _pendingRescans.Add(rescanRoot);
-                    }
-                },
+                RequestOverflowRescan,
                 LoggerShim.For<FswIndexSource>(_logger),
                 onChanged: () => _dirty = true);
             watcher.Start(root);
@@ -879,6 +873,24 @@ public sealed class IndexingService : IHostedService, IDisposable
         {
             lease?.Dispose();
             _logger.LogWarning(ex, "감시 시작 실패: {Root}", root);
+        }
+    }
+
+    /// <summary>
+    /// FSW 버퍼 오버플로(이벤트 유실) 시 호출된다. 예약 스캔이 설정돼 있으면 즉시 전체 재스캔하지 않고
+    /// 예약 시각(기본 12:00)의 전체 재스캔에 맡긴다 — 바쁜 시스템 드라이브(C:)는 오버플로가 잦아
+    /// 매번 전체(네트워크 포함) 재스캔이 반복되면 "수시 인덱싱"이 된다. 개별 변경은 FSW가 평소대로 반영한다.
+    /// </summary>
+    private void RequestOverflowRescan(string rescanRoot)
+    {
+        if (_options.DailyScanTime is not null)
+        {
+            return;
+        }
+
+        lock (_rescanGate)
+        {
+            _pendingRescans.Add(rescanRoot);
         }
     }
 

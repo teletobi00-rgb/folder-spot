@@ -29,6 +29,7 @@ public sealed class FileListViewModelTests
     public FileListViewModelTests()
     {
         _settings.Current.Returns(new AppSettings());
+        TestSupport.StreamingEnumeratorStub.StreamFromList(_enumerator);
     }
 
     private FileListViewModel CreateViewModel() => new(
@@ -238,5 +239,29 @@ public sealed class FileListViewModelTests
 
         vm.CurrentPath.Should().Be(@"C:\b");
         vm.Items.Select(i => i.Name).Should().Equal("b.txt");
+    }
+
+    [Fact]
+    public async Task NavigateTo_StreamsMultipleBatches_AccumulatesAndSortsAll()
+    {
+        // 스트리밍이 여러 배치로 나눠 와도 누적·정렬되어 전체가 폴더 우선·이름순으로 표시되어야 한다.
+        _enumerator.StreamAsync(@"C:\test", Arg.Any<CancellationToken>())
+            .Returns(_ => Batches(
+                [File("c.txt"), File("a.txt")],
+                [Dir("zdir"), File("b.txt")]));
+        var vm = CreateViewModel();
+
+        await vm.NavigateToAsync(@"C:\test");
+
+        vm.Items.Select(i => i.Name).Should().Equal("zdir", "a.txt", "b.txt", "c.txt");
+    }
+
+    private static async IAsyncEnumerable<IReadOnlyList<FileEntry>> Batches(params FileEntry[][] batches)
+    {
+        foreach (var batch in batches)
+        {
+            await Task.Yield();
+            yield return batch;
+        }
     }
 }

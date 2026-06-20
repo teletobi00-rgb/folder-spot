@@ -150,6 +150,11 @@
 
             <StackPanel Grid.Column="2" Orientation="Horizontal">
                 <ui:Button Margin="8,0,0,0"
+                           Command="{Binding AddressBar.CopyAddressCommand}"
+                           ToolTip="현재 경로 복사">
+                    <ui:SymbolIcon Symbol="Copy24" />
+                </ui:Button>
+                <ui:Button Margin="4,0,0,0"
                            Command="{Binding Workspace.ToggleDualModeCommand}"
                            ToolTip="2분할 토글 (Ctrl+Shift+D)">
                     <ui:SymbolIcon Symbol="WindowMultiple20" />

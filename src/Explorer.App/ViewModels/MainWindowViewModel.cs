@@ -55,6 +55,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Favorites.FolderOpenRequested += (_, path) => _ = Workspace.ActiveFileList.NavigateToAsync(path);
         AddressBar.NavigationRequested += (_, path) => _ = Workspace.ActiveFileList.NavigateToAsync(path);
 
+        // 빠른 실행 바에서 연 프로그램(cmd 등)은 활성 페인의 현재 폴더에서 시작한다.
+        ProgramLauncher.CurrentFolderProvider = () => Workspace.ActiveFileList.CurrentPath;
+
         // 주소창은 항상 "활성 페인"의 경로를 따라간다 — 활성 페인이 바뀌면 구독을 옮긴다.
         _wiredFileList = Workspace.ActiveFileList;
         _wiredFileList.PropertyChanged += OnActiveFileListPropertyChanged;

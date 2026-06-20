@@ -28,15 +28,18 @@ public sealed partial class ProgramLauncherViewModel : ObservableObject
 
     public ObservableCollection<PinnedProgramViewModel> Items { get; } = [];
 
+    /// <summary>런처로 여는 프로그램의 작업 폴더 — 활성 페인의 현재 폴더를 돌려준다(cmd 등이 현재 위치에서 열리도록).</summary>
+    public Func<string?>? CurrentFolderProvider { get; set; }
+
     /// <summary>설정 창에서 표시 여부가 바뀐 뒤 동기화한다.</summary>
     public void SyncVisibilityFromSettings() => IsVisible = _settings.Current.ShowProgramLauncher;
 
     [RelayCommand]
-    private static void Launch(PinnedProgramViewModel? item)
+    private void Launch(PinnedProgramViewModel? item)
     {
         if (item is not null)
         {
-            ProgramResolver.Launch(item.Command);
+            ProgramResolver.Launch(item.Command, CurrentFolderProvider?.Invoke());
         }
     }
 

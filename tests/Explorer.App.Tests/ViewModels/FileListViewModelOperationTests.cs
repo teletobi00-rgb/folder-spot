@@ -25,6 +25,7 @@ public sealed class FileListViewModelOperationTests
     public FileListViewModelOperationTests()
     {
         _settings.Current.Returns(new AppSettings());
+        TestSupport.StreamingEnumeratorStub.StreamFromList(_enumerator);
         _operations.CopyAsync(default!, default!, default).ReturnsForAnyArgs(FileOperationResult.Success());
         _operations.MoveAsync(default!, default!, default).ReturnsForAnyArgs(FileOperationResult.Success());
         _operations.DeleteAsync(default!, default, default).ReturnsForAnyArgs(FileOperationResult.Success());

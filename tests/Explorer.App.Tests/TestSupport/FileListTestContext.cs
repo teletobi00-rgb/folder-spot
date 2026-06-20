@@ -44,6 +44,7 @@ internal sealed class FileListTestContext
         Settings.Current.Returns(new AppSettings());
         Enumerator.ListAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(Task.FromResult<IReadOnlyList<FileEntry>>([]));
+        StreamingEnumeratorStub.StreamFromList(Enumerator);
 
         var success = Task.FromResult(FileOperationResult.Success());
         Operations.CopyAsync(default!, default!, default).ReturnsForAnyArgs(success);

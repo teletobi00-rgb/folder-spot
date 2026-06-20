@@ -438,29 +438,45 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
         Status = FileListStatus.None;
         StatusMessage = null;
 
+        var showHidden = _settings.Current.ShowHiddenFiles;
+        var comparer = FileEntryComparers.Create(Sort);
+        var collected = new List<FileItemViewModel>(256);
+        var shown = false;
+        var nextDisplayAt = 0L;
+
         try
         {
-            var entries = await _enumerator.ListAsync(path, ct).ConfigureAwait(true);
-            ct.ThrowIfCancellationRequested();
-
-            var showHidden = _settings.Current.ShowHiddenFiles;
-            var comparer = FileEntryComparers.Create(Sort);
-            var items = await Task.Run(
-                () =>
+            // 전체 열거를 기다리지 않고 도착하는 배치마다 정렬·표시한다 — 이름/크기/날짜/특성은 즉시,
+            // 아이콘·자물쇠·썸네일은 행이 그려질 때 지연 로드(네트워크·대용량 폴더 체감 개선).
+            await foreach (var batch in _enumerator.StreamAsync(path, ct).ConfigureAwait(true))
+            {
+                ct.ThrowIfCancellationRequested();
+                foreach (var entry in batch)
                 {
-                    var filtered = showHidden ? entries.ToList() : entries.Where(e => !e.IsHidden).ToList();
-                    filtered.Sort(comparer);
-                    return filtered.Select(e => new FileItemViewModel(e, _iconProvider)).ToArray();
-                },
-                ct).ConfigureAwait(true);
-            ct.ThrowIfCancellationRequested();
+                    if (showHidden || !entry.IsHidden)
+                    {
+                        collected.Add(new FileItemViewModel(entry, _iconProvider));
+                    }
+                }
 
-            _allItems = items;
-            SelectedItem = keepSelectedPath is null
-                ? null
-                : items.FirstOrDefault(i => string.Equals(i.Entry.FullPath, keepSelectedPath, StringComparison.OrdinalIgnoreCase));
-            ApplyFilter();
-            Status = items.Length == 0 ? FileListStatus.Empty : FileListStatus.None;
+                // 첫 배치는 즉시 표시(스피너 제거), 이후는 ~80ms 스로틀로 갱신해 재렌더 폭주를 막는다.
+                var now = Environment.TickCount64;
+                if (!shown || now >= nextDisplayAt)
+                {
+                    PublishSorted(collected, comparer, keepSelectedPath);
+                    if (!shown)
+                    {
+                        IsLoading = false;
+                        shown = true;
+                    }
+
+                    nextDisplayAt = now + 80;
+                }
+            }
+
+            ct.ThrowIfCancellationRequested();
+            PublishSorted(collected, comparer, keepSelectedPath);
+            Status = collected.Count == 0 ? FileListStatus.Empty : FileListStatus.None;
         }
         catch (OperationCanceledException)
         {
@@ -493,5 +509,17 @@ public sealed partial class FileListViewModel : ObservableObject, IDisposable
                 IsLoading = false;
             }
         }
+    }
+
+    /// <summary>지금까지 수집한 항목을 정렬해 표시한다(스트리밍 중 반복 호출 — 같은 VM 인스턴스를 재사용).</summary>
+    private void PublishSorted(List<FileItemViewModel> collected, IComparer<FileEntry> comparer, string? keepSelectedPath)
+    {
+        var sorted = collected.ToList();
+        sorted.Sort((a, b) => comparer.Compare(a.Entry, b.Entry));
+        _allItems = sorted;
+        SelectedItem = keepSelectedPath is null
+            ? null
+            : sorted.FirstOrDefault(i => string.Equals(i.Entry.FullPath, keepSelectedPath, StringComparison.OrdinalIgnoreCase));
+        ApplyFilter();
     }
 }

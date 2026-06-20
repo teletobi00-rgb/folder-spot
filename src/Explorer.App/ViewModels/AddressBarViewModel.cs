@@ -45,4 +45,24 @@ public sealed partial class AddressBarViewModel : ObservableObject
         ErrorText = null;
         NavigationRequested?.Invoke(this, normalized);
     }
+
+    /// <summary>현재 주소(경로)를 클립보드에 복사한다.</summary>
+    [RelayCommand]
+    private void CopyAddress()
+    {
+        var path = Text?.Trim();
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        try
+        {
+            System.Windows.Clipboard.SetText(path);
+        }
+        catch (System.Runtime.InteropServices.COMException)
+        {
+            // 클립보드가 다른 앱에 잠겨 있으면 무시.
+        }
+    }
 }

@@ -78,8 +78,11 @@ public static class ProgramResolver
         return string.IsNullOrEmpty(name) ? command : name;
     }
 
-    /// <summary>명령을 셸로 실행. 실패해도 조용히 무시(런처 클릭은 치명적 작업이 아니다).</summary>
-    public static bool Launch(string command)
+    /// <summary>
+    /// 명령을 셸로 실행. <paramref name="workingDirectory"/>가 유효한 폴더면 작업 폴더로 지정한다
+    /// (cmd/PowerShell 등이 현재 위치에서 열리도록). 실패해도 조용히 무시(런처 클릭은 치명적 작업이 아니다).
+    /// </summary>
+    public static bool Launch(string command, string? workingDirectory = null)
     {
         if (string.IsNullOrWhiteSpace(command))
         {
@@ -88,11 +91,18 @@ public static class ProgramResolver
 
         try
         {
-            Process.Start(new ProcessStartInfo
+            var info = new ProcessStartInfo
             {
                 FileName = command.Trim().Trim('"'),
                 UseShellExecute = true,
-            });
+            };
+
+            if (!string.IsNullOrWhiteSpace(workingDirectory) && System.IO.Directory.Exists(workingDirectory))
+            {
+                info.WorkingDirectory = workingDirectory;
+            }
+
+            Process.Start(info);
             return true;
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or FileNotFoundException)

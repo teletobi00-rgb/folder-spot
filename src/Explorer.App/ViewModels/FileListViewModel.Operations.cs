@@ -100,6 +100,23 @@ public sealed partial class FileListViewModel
         StatusMessage = $"{added}개 항목을 즐겨찾기에 추가했습니다.";
     }
 
+    /// <summary>선택한 파일들을 첨부해 Outlook 새 메일 작성 창을 연다(폴더는 제외).</summary>
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private void ComposeOutlookMail()
+    {
+        var files = SelectedItems.Where(i => !i.IsDirectory).Select(i => i.Entry.FullPath).ToArray();
+        if (files.Length == 0)
+        {
+            StatusMessage = "첨부할 파일을 선택하세요 (폴더는 제외).";
+            return;
+        }
+
+        if (!Explorer.App.Services.OutlookMailService.NewMailWithAttachments(files))
+        {
+            StatusMessage = "Outlook으로 새 메일을 열지 못했습니다 (Outlook 설치 필요).";
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(HasSingleSelection))]
     private void BeginRename()
     {
@@ -253,6 +270,7 @@ public sealed partial class FileListViewModel
         DeleteSelectionPermanentCommand.NotifyCanExecuteChanged();
         BeginRenameCommand.NotifyCanExecuteChanged();
         AddSelectionToFavoritesCommand.NotifyCanExecuteChanged();
+        ComposeOutlookMailCommand.NotifyCanExecuteChanged();
         PasteCommand.NotifyCanExecuteChanged();
     }
 

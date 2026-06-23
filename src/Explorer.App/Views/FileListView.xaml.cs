@@ -23,6 +23,9 @@ public partial class FileListView : UserControl
     private ListView? _marqueeList;
     private Point _marqueeOrigin;
 
+    /// <summary>멀티 선택 항목을 (수식어 없이) 눌렀을 때의 전체 선택 — WPF가 MouseDown에서 단일로 접어도 실제 드래그 시작 시 전체를 복원하기 위해 보관한다.</summary>
+    private IReadOnlyList<FileItemViewModel>? _pendingMultiDrag;
+
     /// <summary>정렬 화살표(▲/▼)를 붙일 컬럼들 — 원본 헤더 텍스트와 정렬 기준을 함께 보관한다.</summary>
     private (GridViewColumn Column, string BaseHeader, SortColumn Kind)[] _sortColumns = [];
 
@@ -245,14 +248,29 @@ public partial class FileListView : UserControl
         _dragStartPoint = e.GetPosition(this);
         _marqueePending = false;
         _marqueeActive = false;
+        _pendingMultiDrag = null;
 
         var noModifier = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) == 0;
-        var onItem = e.OriginalSource is DependencyObject source
+        var clickedRow = e.OriginalSource is DependencyObject source
             && e.OriginalSource is not System.Windows.Controls.TextBox
-            && FindAncestor<ListViewItem>(source) is not null;
+            ? FindAncestor<ListViewItem>(source)
+            : null;
+        var onItem = clickedRow is not null;
 
         // 항목 위 + 수식어 없음: 앱→탐색기 드래그 후보(드래그 시작으로 취급하면 선택 확장이 깨지므로 Shift/Ctrl 제외).
         _dragStartedOnItem = noModifier && onItem;
+
+        // 멀티 선택된 항목을 (수식어 없이) 누르면 WPF가 MouseDown에서 단일 선택으로 접어 버려 드래그 시 1개만 끌린다.
+        // 선택 처리를 가로채지 않고(키보드 포커스·Shift 선택 앵커는 WPF가 평소대로 정상 처리하도록 둔다),
+        // 현재 전체 선택을 기억해 뒀다가 실제로 드래그가 시작될 때 전체 선택을 복원한다.
+        // 드래그가 없으면 WPF의 단일 선택을 그대로 둔다(탐색기와 동일).
+        if (_dragStartedOnItem
+            && clickedRow!.DataContext is FileItemViewModel clickedItem
+            && ViewModel is { SelectedItems.Count: > 1 } vm
+            && vm.SelectedItems.Contains(clickedItem))
+        {
+            _pendingMultiDrag = vm.SelectedItems.ToArray();
+        }
 
         // 빈 영역 + 수식어 없음: 드래그 영역 선택(마퀴) 후보. 임계 거리를 넘으면 시작한다.
         if (!onItem && noModifier && sender is ListView list)
@@ -308,11 +326,36 @@ public partial class FileListView : UserControl
         }
 
         _dragStartedOnItem = false;
-        var paths = vm.SelectedItems.Select(i => i.Entry.FullPath).ToArray();
+        var dragList = sender as ListView ?? FileList;
+
+        // 멀티 선택에서 시작한 드래그면 WPF가 MouseDown에서 단일로 접었을 수 있으니 전체 선택을 복원하고,
+        // 보관해 둔 전체 집합으로 드래그한다(시각 복원 성공 여부와 무관하게 전체가 끌리도록).
+        var pending = _pendingMultiDrag;
+        _pendingMultiDrag = null;
+        IReadOnlyList<FileItemViewModel> dragItems = vm.SelectedItems;
+        if (pending is { Count: > 1 })
+        {
+            RestoreSelection(dragList, pending);
+            dragItems = pending;
+        }
+
+        var paths = dragItems.Select(i => i.Entry.FullPath).ToArray();
         var data = new DataObject(DataFormats.FileDrop, paths);
         DragDrop.DoDragDrop(
-            sender as ListView ?? FileList, data,
+            dragList, data,
             DragDropEffects.Copy | DragDropEffects.Move | DragDropEffects.Link);
+    }
+
+    /// <summary>WPF가 MouseDown에서 단일로 접은 선택을 보관해 둔 전체 집합으로 되살린다(데이터 항목 기준이라 가상화 컨테이너 재활용에도 안전).</summary>
+    private static void RestoreSelection(ListView list, IReadOnlyList<FileItemViewModel> items)
+    {
+        foreach (var item in items)
+        {
+            if (!list.SelectedItems.Contains(item))
+            {
+                list.SelectedItems.Add(item);
+            }
+        }
     }
 
     private void OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -324,6 +367,8 @@ public partial class FileListView : UserControl
             e.Handled = true;
         }
 
+        // 멀티 선택 항목을 눌렀지만 드래그하지 않았으면, WPF가 MouseDown에서 만든 단일 선택을 그대로 둔다(탐색기 동작).
+        _pendingMultiDrag = null;
         _marqueePending = false;
         _marqueeActive = false;
     }

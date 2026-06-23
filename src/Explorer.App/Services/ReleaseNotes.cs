@@ -8,6 +8,10 @@ public static class ReleaseNotes
 {
     private static readonly Dictionary<string, IReadOnlyList<string>> Notes = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["v1.4.1"] =
+        [
+            "여러 파일을 선택한 뒤 드래그하면 마우스 밑의 한 개만 옮겨지던 문제를 고쳤습니다 — 이제 선택한 파일 전체가 복사·이동됩니다.",
+        ],
         ["v1.4.0"] =
         [
             "폴더 로딩이 빨라졌습니다 — 전체를 다 읽기 전에 파일이 먼저 표시되고, 아이콘·자물쇠는 뒤이어 채워집니다(네트워크·대용량 폴더에서 특히 체감).",

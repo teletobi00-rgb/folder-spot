@@ -8,6 +8,10 @@ public static class ReleaseNotes
 {
     private static readonly Dictionary<string, IReadOnlyList<string>> Notes = new(StringComparer.OrdinalIgnoreCase)
     {
+        ["v1.4.2"] =
+        [
+            "우클릭 'Windows 메뉴 표시'가 훨씬 빨라졌습니다 — 메뉴를 띄우는 도우미를 매번 새로 띄우지 않고 상주시켜(앱 시작 시 미리 준비) 곧바로 뜹니다. 도우미가 멈춰도 자동으로 복구되며, 앱을 닫으면 함께 정리됩니다.",
+        ],
         ["v1.4.1"] =
         [
             "여러 파일을 선택한 뒤 드래그하면 마우스 밑의 한 개만 옮겨지던 문제를 고쳤습니다 — 이제 선택한 파일 전체가 복사·이동됩니다.",
